@@ -1,0 +1,75 @@
+{
+  "name": "git",
+  "description": "Git version control operations",
+  "commands": [
+    {
+      "name": "status",
+      "command": "git status",
+      "description": "Show working tree status"
+    },
+    {
+      "name": "diff",
+      "command": "git diff",
+      "description": "Show changes in working directory"
+    },
+    {
+      "name": "diff_staged",
+      "command": "git diff --staged",
+      "description": "Show staged changes"
+    },
+    {
+      "name": "log",
+      "command": "git log --oneline -20",
+      "description": "Show recent commit history"
+    },
+    {
+      "name": "add",
+      "command": "git add {files}",
+      "description": "Stage files for commit",
+      "parameters": {
+        "files": "Files to stage (space-separated or . for all)"
+      }
+    },
+    {
+      "name": "commit",
+      "command": "git commit -m \"{message}\"",
+      "description": "Create a commit with message",
+      "parameters": {
+        "message": "Commit message"
+      }
+    },
+    {
+      "name": "push",
+      "command": "git push",
+      "description": "Push commits to remote"
+    },
+    {
+      "name": "pull",
+      "command": "git pull",
+      "description": "Pull changes from remote"
+    },
+    {
+      "name": "branch",
+      "command": "git branch",
+      "description": "List branches"
+    },
+    {
+      "name": "checkout",
+      "command": "git checkout {branch}",
+      "description": "Switch to branch",
+      "parameters": {
+        "branch": "Branch name or -b new_branch to create"
+      }
+    },
+    {
+      "name": "stash",
+      "command": "git stash",
+      "description": "Stash current changes"
+    },
+    {
+      "name": "stash_pop",
+      "command": "git stash pop",
+      "description": "Apply and remove latest stash"
+    }
+  ]
+}

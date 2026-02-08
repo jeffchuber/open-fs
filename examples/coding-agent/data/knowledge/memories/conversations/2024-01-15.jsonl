@@ -1,0 +1,8 @@
+{"timestamp": "2024-01-15T10:30:00Z", "role": "user", "content": "I need to add JWT authentication to my FastAPI app"}
+{"timestamp": "2024-01-15T10:30:15Z", "role": "assistant", "content": "I'll help you implement JWT authentication. Let me start by creating the necessary models and utilities."}
+{"timestamp": "2024-01-15T10:35:00Z", "role": "user", "content": "Use bcrypt for password hashing, not the default"}
+{"timestamp": "2024-01-15T10:35:10Z", "role": "assistant", "content": "Good choice. I'll use passlib with bcrypt backend for secure password hashing."}
+{"timestamp": "2024-01-15T11:00:00Z", "role": "user", "content": "Can you add refresh tokens too?"}
+{"timestamp": "2024-01-15T11:00:15Z", "role": "assistant", "content": "Yes, I'll implement a refresh token flow. Access tokens will expire in 15 minutes, refresh tokens in 7 days."}
+{"timestamp": "2024-01-15T11:30:00Z", "role": "user", "content": "The tests should use a separate test database"}
+{"timestamp": "2024-01-15T11:30:12Z", "role": "assistant", "content": "I'll create a pytest fixture that sets up a test database and cleans up after each test."}

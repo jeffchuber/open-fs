@@ -1,0 +1,109 @@
+# Coding Agent VFS Configuration
+#
+# A multi-tier storage architecture for an AI coding assistant with:
+# - Hot tier: Fast local storage for active context
+# - Warm tier: Indexed searchable knowledge base
+# - Cold tier: Long-term archival storage (S3)
+# - Vector tier: Semantic search via Chroma
+
+name: coding-agent
+
+backends:
+  # Hot tier - Fast local SSD for active work
+  local:
+    type: fs
+    root: ${AGENT_DATA_DIR:-./data}/local
+
+  # Warm tier - Local storage for searchable knowledge
+  knowledge:
+    type: fs
+    root: ${AGENT_DATA_DIR:-./data}/knowledge
+
+  # Cold tier - S3 for long-term storage (optional)
+  # archive:
+  #   type: s3
+  #   bucket: ${S3_BUCKET}
+  #   region: ${AWS_REGION:-us-east-1}
+  #   prefix: coding-agent/
+  #   access_key_id: ${AWS_ACCESS_KEY_ID}
+  #   secret_access_key: ${AWS_SECRET_ACCESS_KEY}
+
+  # Vector tier - Chroma for semantic search (optional)
+  # vectors:
+  #   type: chroma
+  #   endpoint: ${CHROMA_ENDPOINT:-http://localhost:8000}
+
+mounts:
+  # ==========================================================================
+  # CONTEXT - Active working context for current task
+  # ==========================================================================
+  - path: /context
+    backend: local
+    collection: context
+    index:
+      chunker: recursive
+      chunk_size: 1000
+
+  # ==========================================================================
+  # SKILLS - Reusable capabilities and tool definitions
+  # ==========================================================================
+  - path: /skills
+    backend: knowledge
+    collection: skills
+    index:
+      chunker: semantic
+      chunk_size: 2000
+
+  # ==========================================================================
+  # MEMORIES - Conversation history and learned patterns
+  # ==========================================================================
+  - path: /memories
+    backend: knowledge
+    collection: memories
+    index:
+      chunker: fixed
+      chunk_size: 500
+
+  # ==========================================================================
+  # CODE - Code snippets, templates, and examples
+  # ==========================================================================
+  - path: /code
+    backend: knowledge
+    collection: code
+    index:
+      chunker: recursive
+      chunk_size: 1500
+
+  # ==========================================================================
+  # DOCS - Documentation and reference materials
+  # ==========================================================================
+  - path: /docs
+    backend: knowledge
+    collection: docs
+    read_only: true
+    index:
+      chunker: semantic
+      chunk_size: 2000
+
+  # ==========================================================================
+  # SCRATCH - Temporary workspace (no indexing)
+  # ==========================================================================
+  - path: /scratch
+    backend: local
+
+  # ==========================================================================
+  # ARCHIVE - Long-term cold storage (read-heavy)
+  # ==========================================================================
+  # - path: /archive
+  #   backend: archive
+  #   read_only: true
+
+defaults:
+  cache:
+    enabled: true
+    max_entries: 500
+    max_size_bytes: 104857600  # 100MB
+    ttl_seconds: 600           # 10 minutes
+
+  sync:
+    mode: write_through

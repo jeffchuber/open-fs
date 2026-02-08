@@ -1,0 +1,61 @@
+{
+  "name": "python",
+  "description": "Python development tools",
+  "commands": [
+    {
+      "name": "run",
+      "command": "python {file}",
+      "description": "Run a Python script"
+    },
+    {
+      "name": "test",
+      "command": "pytest {path} -v",
+      "description": "Run tests with pytest"
+    },
+    {
+      "name": "test_coverage",
+      "command": "pytest --cov={package} --cov-report=term-missing",
+      "description": "Run tests with coverage"
+    },
+    {
+      "name": "lint",
+      "command": "ruff check {path}",
+      "description": "Lint code with ruff"
+    },
+    {
+      "name": "format",
+      "command": "ruff format {path}",
+      "description": "Format code with ruff"
+    },
+    {
+      "name": "typecheck",
+      "command": "mypy {path}",
+      "description": "Type check with mypy"
+    },
+    {
+      "name": "install",
+      "command": "pip install {package}",
+      "description": "Install a package"
+    },
+    {
+      "name": "install_dev",
+      "command": "pip install -e '.[dev]'",
+      "description": "Install package in dev mode"
+    },
+    {
+      "name": "freeze",
+      "command": "pip freeze > requirements.txt",
+      "description": "Export dependencies"
+    },
+    {
+      "name": "venv",
+      "command": "python -m venv .venv && source .venv/bin/activate",
+      "description": "Create and activate virtual environment"
+    }
+  ],
+  "snippets": {
+    "main_guard": "if __name__ == \"__main__\":\n    main()",
+    "dataclass": "@dataclass\nclass {Name}:\n    field: type",
+    "async_main": "async def main():\n    pass\n\nif __name__ == \"__main__\":\n    asyncio.run(main())"
+  }
+}
