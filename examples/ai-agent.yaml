@@ -1,0 +1,69 @@
+# AI Agent Workspace Configuration
+# Designed for use with AI assistants and agents
+#
+# Generate tool definitions with:
+#   ax --config ai-agent.yaml tools --format mcp
+#   ax --config ai-agent.yaml tools --format openai
+
+name: ai-agent-workspace
+
+backends:
+  # Working directory for agent tasks
+  workspace:
+    type: fs
+    root: ./agent-workspace
+
+  # Shared knowledge base (read-only)
+  knowledge:
+    type: fs
+    root: ./knowledge-base
+
+  # Agent memory/context storage
+  memory:
+    type: fs
+    root: ./agent-memory
+
+  # Scratch space for temporary files
+  scratch:
+    type: fs
+    root: /tmp/ax-scratch
+
+mounts:
+  # Main workspace - agent can read/write
+  - path: /workspace
+    backend: workspace
+    collection: workspace
+
+  # Knowledge base - read only reference material
+  - path: /knowledge
+    backend: knowledge
+    read_only: true
+    collection: knowledge
+
+  # Memory - for storing agent context between sessions
+  - path: /memory
+    backend: memory
+    collection: memory
+
+  # Scratch - temporary files, not indexed
+  - path: /scratch
+    backend: scratch
+
+# Indexing configuration for semantic search
+indexing:
+  default:
+    chunker:
+      strategy: recursive
+      chunk_size: 1000
+      chunk_overlap: 200
+    embedder:
+      provider: ollama
+      model: nomic-embed-text
+      endpoint: http://localhost:11434
+
+# Search configuration
+search:
+  default:
+    mode: hybrid
+    dense_weight: 0.7
+    sparse_weight: 0.3

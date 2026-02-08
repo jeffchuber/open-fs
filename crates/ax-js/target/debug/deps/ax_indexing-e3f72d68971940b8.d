@@ -1,0 +1,19 @@
+/Users/jeff/src/demos/blah/ax/crates/ax-js/target/debug/deps/ax_indexing-e3f72d68971940b8.d: /Users/jeff/src/demos/blah/ax/crates/ax-indexing/src/lib.rs /Users/jeff/src/demos/blah/ax/crates/ax-indexing/src/chunkers/mod.rs /Users/jeff/src/demos/blah/ax/crates/ax-indexing/src/chunkers/fixed.rs /Users/jeff/src/demos/blah/ax/crates/ax-indexing/src/chunkers/recursive.rs /Users/jeff/src/demos/blah/ax/crates/ax-indexing/src/chunkers/semantic.rs /Users/jeff/src/demos/blah/ax/crates/ax-indexing/src/embedders/mod.rs /Users/jeff/src/demos/blah/ax/crates/ax-indexing/src/embedders/stub.rs /Users/jeff/src/demos/blah/ax/crates/ax-indexing/src/embedders/ollama.rs /Users/jeff/src/demos/blah/ax/crates/ax-indexing/src/embedders/openai.rs /Users/jeff/src/demos/blah/ax/crates/ax-indexing/src/extractors/mod.rs /Users/jeff/src/demos/blah/ax/crates/ax-indexing/src/extractors/plaintext.rs /Users/jeff/src/demos/blah/ax/crates/ax-indexing/src/sparse.rs /Users/jeff/src/demos/blah/ax/crates/ax-indexing/src/types.rs
+
+/Users/jeff/src/demos/blah/ax/crates/ax-js/target/debug/deps/libax_indexing-e3f72d68971940b8.rlib: /Users/jeff/src/demos/blah/ax/crates/ax-indexing/src/lib.rs /Users/jeff/src/demos/blah/ax/crates/ax-indexing/src/chunkers/mod.rs /Users/jeff/src/demos/blah/ax/crates/ax-indexing/src/chunkers/fixed.rs /Users/jeff/src/demos/blah/ax/crates/ax-indexing/src/chunkers/recursive.rs /Users/jeff/src/demos/blah/ax/crates/ax-indexing/src/chunkers/semantic.rs /Users/jeff/src/demos/blah/ax/crates/ax-indexing/src/embedders/mod.rs /Users/jeff/src/demos/blah/ax/crates/ax-indexing/src/embedders/stub.rs /Users/jeff/src/demos/blah/ax/crates/ax-indexing/src/embedders/ollama.rs /Users/jeff/src/demos/blah/ax/crates/ax-indexing/src/embedders/openai.rs /Users/jeff/src/demos/blah/ax/crates/ax-indexing/src/extractors/mod.rs /Users/jeff/src/demos/blah/ax/crates/ax-indexing/src/extractors/plaintext.rs /Users/jeff/src/demos/blah/ax/crates/ax-indexing/src/sparse.rs /Users/jeff/src/demos/blah/ax/crates/ax-indexing/src/types.rs
+
+/Users/jeff/src/demos/blah/ax/crates/ax-js/target/debug/deps/libax_indexing-e3f72d68971940b8.rmeta: /Users/jeff/src/demos/blah/ax/crates/ax-indexing/src/lib.rs /Users/jeff/src/demos/blah/ax/crates/ax-indexing/src/chunkers/mod.rs /Users/jeff/src/demos/blah/ax/crates/ax-indexing/src/chunkers/fixed.rs /Users/jeff/src/demos/blah/ax/crates/ax-indexing/src/chunkers/recursive.rs /Users/jeff/src/demos/blah/ax/crates/ax-indexing/src/chunkers/semantic.rs /Users/jeff/src/demos/blah/ax/crates/ax-indexing/src/embedders/mod.rs /Users/jeff/src/demos/blah/ax/crates/ax-indexing/src/embedders/stub.rs /Users/jeff/src/demos/blah/ax/crates/ax-indexing/src/embedders/ollama.rs /Users/jeff/src/demos/blah/ax/crates/ax-indexing/src/embedders/openai.rs /Users/jeff/src/demos/blah/ax/crates/ax-indexing/src/extractors/mod.rs /Users/jeff/src/demos/blah/ax/crates/ax-indexing/src/extractors/plaintext.rs /Users/jeff/src/demos/blah/ax/crates/ax-indexing/src/sparse.rs /Users/jeff/src/demos/blah/ax/crates/ax-indexing/src/types.rs
+
+/Users/jeff/src/demos/blah/ax/crates/ax-indexing/src/lib.rs:
+/Users/jeff/src/demos/blah/ax/crates/ax-indexing/src/chunkers/mod.rs:
+/Users/jeff/src/demos/blah/ax/crates/ax-indexing/src/chunkers/fixed.rs:
+/Users/jeff/src/demos/blah/ax/crates/ax-indexing/src/chunkers/recursive.rs:
+/Users/jeff/src/demos/blah/ax/crates/ax-indexing/src/chunkers/semantic.rs:
+/Users/jeff/src/demos/blah/ax/crates/ax-indexing/src/embedders/mod.rs:
+/Users/jeff/src/demos/blah/ax/crates/ax-indexing/src/embedders/stub.rs:
+/Users/jeff/src/demos/blah/ax/crates/ax-indexing/src/embedders/ollama.rs:
+/Users/jeff/src/demos/blah/ax/crates/ax-indexing/src/embedders/openai.rs:
+/Users/jeff/src/demos/blah/ax/crates/ax-indexing/src/extractors/mod.rs:
+/Users/jeff/src/demos/blah/ax/crates/ax-indexing/src/extractors/plaintext.rs:
+/Users/jeff/src/demos/blah/ax/crates/ax-indexing/src/sparse.rs:
+/Users/jeff/src/demos/blah/ax/crates/ax-indexing/src/types.rs:

@@ -1,0 +1,13 @@
+# Minimal AX configuration
+# Single local filesystem backend
+
+name: my-workspace
+
+backends:
+  local:
+    type: fs
+    root: ./data
+
+mounts:
+  - path: /workspace
+    backend: local

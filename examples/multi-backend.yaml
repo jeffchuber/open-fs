@@ -1,0 +1,36 @@
+# Multi-backend AX configuration
+# Demonstrates multiple backends with different mount points
+
+name: multi-backend-workspace
+
+backends:
+  # Local filesystem for working files
+  local:
+    type: fs
+    root: ./workspace
+
+  # Separate local backend for archives
+  archives:
+    type: fs
+    root: ./archives
+
+  # S3 for remote storage (requires --features s3)
+  # s3_remote:
+  #   type: s3
+  #   bucket: my-bucket
+  #   region: us-west-2
+  #   prefix: ax-data
+
+mounts:
+  # Main workspace - read/write
+  - path: /workspace
+    backend: local
+
+  # Archives - read only
+  - path: /archives
+    backend: archives
+    read_only: true
+
+  # Remote storage
+  # - path: /remote
+  #   backend: s3_remote

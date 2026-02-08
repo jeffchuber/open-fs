@@ -1,0 +1,42 @@
+# S3 Backend Configuration
+# Requires: cargo build --features s3
+
+name: s3-workspace
+
+backends:
+  # AWS S3
+  aws_s3:
+    type: s3
+    bucket: my-bucket
+    region: us-east-1
+    prefix: project-data
+    # Optional: Use explicit credentials instead of AWS default chain
+    # access_key_id: ${AWS_ACCESS_KEY_ID}
+    # secret_access_key: ${AWS_SECRET_ACCESS_KEY}
+
+  # MinIO (S3-compatible)
+  minio:
+    type: s3
+    bucket: local-bucket
+    region: us-east-1
+    endpoint: http://localhost:9000
+    access_key_id: ${MINIO_ACCESS_KEY}
+    secret_access_key: ${MINIO_SECRET_KEY}
+
+  # Local cache
+  cache:
+    type: fs
+    root: ./cache
+
+mounts:
+  # S3 data with local cache
+  - path: /data
+    backend: aws_s3
+
+  # Local MinIO for development
+  - path: /dev
+    backend: minio
+
+  # Fast local cache
+  - path: /cache
+    backend: cache

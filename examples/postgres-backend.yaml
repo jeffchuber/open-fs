@@ -1,0 +1,36 @@
+# PostgreSQL Backend Configuration
+# Requires: cargo build --features postgres
+#
+# The Postgres backend stores files in a table:
+# CREATE TABLE ax_files (
+#     path TEXT PRIMARY KEY,
+#     content BYTEA NOT NULL,
+#     size BIGINT NOT NULL,
+#     modified TIMESTAMPTZ NOT NULL DEFAULT NOW()
+# );
+
+name: postgres-workspace
+
+backends:
+  # PostgreSQL storage
+  pg:
+    type: postgres
+    connection_url: ${DATABASE_URL}
+    # Or explicit connection string:
+    # connection_url: postgres://user:password@localhost:5432/ax_files
+    table_name: ax_files
+    max_connections: 5
+
+  # Local filesystem for temp files
+  local:
+    type: fs
+    root: ./temp
+
+mounts:
+  # Persistent storage in Postgres
+  - path: /storage
+    backend: pg
+
+  # Temporary local files
+  - path: /temp
+    backend: local

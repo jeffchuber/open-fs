@@ -1,0 +1,24 @@
+# Multi-mount configuration example
+# Shows multiple backends and mounts with different modes
+
+name: multi-workspace
+
+backends:
+  # Primary workspace storage
+  workspace:
+    type: fs
+    root: ./data/workspace
+
+  # Scratch space (no indexing)
+  scratch:
+    type: fs
+    root: ./data/scratch
+
+mounts:
+  # Main code workspace - full indexing
+  - path: /workspace
+    backend: workspace
+
+  # Temporary files - no indexing
+  - path: /scratch
+    backend: scratch

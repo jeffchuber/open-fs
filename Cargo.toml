@@ -1,0 +1,24 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/ax-config",
+    "crates/ax-core",
+    "crates/ax-backends",
+    "crates/ax-indexing",
+    "crates/ax-cli",
+]
+
+# ax-ffi is excluded from default workspace build
+# It requires Python development headers and should be built with:
+#   cd crates/ax-ffi && maturin develop
+# or:
+#   cd crates/ax-ffi && maturin build --release
+#
+# ax-js is excluded as it requires napi-cli and Node.js headers
+# Build with: cd crates/ax-js && npm install && npm run build
+exclude = ["crates/ax-ffi", "crates/ax-js"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"

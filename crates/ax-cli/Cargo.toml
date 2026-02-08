@@ -1,0 +1,25 @@
+[package]
+name = "ax-cli"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "ax"
+path = "src/main.rs"
+
+[dependencies]
+ax-config = { path = "../ax-config" }
+ax-core = { path = "../ax-core" }
+ax-backends = { path = "../ax-backends" }
+ax-indexing = { path = "../ax-indexing" }
+clap = { version = "4", features = ["derive"] }
+tokio = { version = "1", features = ["full"] }
+dirs-next = "2"
+async-recursion = "1"
+serde_yaml = "0.9"
+regex = "1"
+serde_json = "1"
+chrono = "0.4"
+
+[dev-dependencies]
+tempfile = "3"
