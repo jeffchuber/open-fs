@@ -30,21 +30,10 @@ aws-sdk-s3 = { version = "1", optional = true }
 aws-config = { version = "1", optional = true }
 sqlx = { version = "0.8", features = ["runtime-tokio", "postgres", "chrono"], optional = true }
 
-# FUSE path encoding helpers
-urlencoding = { version = "2", optional = true }
-
-# FUSE dependencies
-parking_lot = { version = "0.12", optional = true }
-
-[target.'cfg(unix)'.dependencies]
-fuser = { version = "0.14", optional = true }
-libc = { version = "0.2", optional = true }
-
 [features]
 default = []
 s3 = ["aws-sdk-s3", "aws-config"]
 postgres = ["sqlx"]
-fuse = ["fuser", "libc", "urlencoding", "parking_lot"]
 all-backends = ["s3", "postgres"]
 
 [dev-dependencies]

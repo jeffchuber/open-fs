@@ -21,6 +21,3 @@ pub use backends::{S3Backend, S3Config};
 
 #[cfg(feature = "postgres")]
 pub use backends::{PostgresBackend, PostgresConfig};
-
-#[cfg(feature = "fuse")]
-pub mod fuse;

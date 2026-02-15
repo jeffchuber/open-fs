@@ -1,6 +1,6 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use serde::Serialize;
 use tokio::sync::RwLock;
@@ -265,55 +265,6 @@ pub type SharedMetrics = Arc<VfsMetrics>;
 /// Create a new shared metrics instance.
 pub fn create_metrics() -> SharedMetrics {
     Arc::new(VfsMetrics::new())
-}
-
-/// A guard that records operation latency when dropped.
-/// Note: This is provided for future integration but not yet used.
-#[allow(dead_code)]
-pub struct LatencyGuard<'a> {
-    metrics: &'a VfsMetrics,
-    start: Instant,
-    operation: LatencyOperation,
-}
-
-#[allow(dead_code)]
-enum LatencyOperation {
-    Read,
-    Write,
-}
-
-#[allow(dead_code)]
-impl<'a> LatencyGuard<'a> {
-    /// Start timing a read operation.
-    pub fn read(metrics: &'a VfsMetrics) -> Self {
-        LatencyGuard {
-            metrics,
-            start: Instant::now(),
-            operation: LatencyOperation::Read,
-        }
-    }
-
-    /// Start timing a write operation.
-    pub fn write(metrics: &'a VfsMetrics) -> Self {
-        LatencyGuard {
-            metrics,
-            start: Instant::now(),
-            operation: LatencyOperation::Write,
-        }
-    }
-}
-
-impl Drop for LatencyGuard<'_> {
-    fn drop(&mut self) {
-        let duration = self.start.elapsed();
-        // Use try_write to avoid blocking - best-effort latency recording
-        if let Ok(mut latencies) = self.metrics.latencies.try_write() {
-            match self.operation {
-                LatencyOperation::Read => latencies.record_read(duration),
-                LatencyOperation::Write => latencies.record_write(duration),
-            }
-        }
-    }
 }
 
 #[cfg(test)]

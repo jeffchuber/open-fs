@@ -75,7 +75,6 @@ impl VfsConfig {
                 BackendConfig::S3(s3) => validate_s3_config(name, s3, &mut errors),
                 BackendConfig::Postgres(pg) => validate_postgres_config(name, pg, &mut errors),
                 BackendConfig::Chroma(chroma) => validate_chroma_config(name, chroma, &mut errors),
-                BackendConfig::Api(api) => validate_api_config(name, api, &mut errors),
             }
         }
 
@@ -189,24 +188,6 @@ fn validate_chroma_config(
     }
 }
 
-fn validate_api_config(
-    name: &str,
-    api: &crate::types::ApiBackendConfig,
-    errors: &mut Vec<ConfigError>,
-) {
-    if api.base_url.is_empty() {
-        errors.push(ConfigError::InvalidConfig(format!(
-            "backends.{}.base_url: must not be empty",
-            name
-        )));
-    } else if !api.base_url.starts_with("http://") && !api.base_url.starts_with("https://") {
-        errors.push(ConfigError::InvalidConfig(format!(
-            "backends.{}.base_url: must start with http:// or https:// (got '{}')",
-            name, api.base_url
-        )));
-    }
-}
-
 fn validate_chunk_config(context: &str, chunk: &ChunkConfig, errors: &mut Vec<ConfigError>) {
     if chunk.size == 0 {
         errors.push(ConfigError::InvalidConfig(format!(
@@ -276,7 +257,7 @@ mod tests {
     use super::*;
     use crate::types::{
         BackendConfig, FsBackendConfig, MountConfig, SyncConfig as MountSyncConfig,
-        S3BackendConfig, PostgresBackendConfig, ChromaBackendConfig, ApiBackendConfig,
+        S3BackendConfig, PostgresBackendConfig, ChromaBackendConfig,
         ChunkConfig, EmbeddingConfig, IndexConfig, WatchConfig, HumanDuration, Secret,
     };
 
@@ -503,44 +484,6 @@ mod tests {
         assert!(errors
             .iter()
             .any(|e| e.to_string().contains("url: must start with http")));
-    }
-
-    #[test]
-    fn test_validate_api_empty_base_url() {
-        let config = VfsConfig {
-            backends: indexmap::indexmap! {
-                "api".to_string() => BackendConfig::Api(ApiBackendConfig {
-                    base_url: "".to_string(),
-                    auth_header: None,
-                }),
-            },
-            mounts: vec![],
-            ..Default::default()
-        };
-
-        let errors = config.validate();
-        assert!(errors
-            .iter()
-            .any(|e| e.to_string().contains("base_url: must not be empty")));
-    }
-
-    #[test]
-    fn test_validate_api_bad_base_url() {
-        let config = VfsConfig {
-            backends: indexmap::indexmap! {
-                "api".to_string() => BackendConfig::Api(ApiBackendConfig {
-                    base_url: "ftp://bad".to_string(),
-                    auth_header: None,
-                }),
-            },
-            mounts: vec![],
-            ..Default::default()
-        };
-
-        let errors = config.validate();
-        assert!(errors
-            .iter()
-            .any(|e| e.to_string().contains("base_url: must start with http")));
     }
 
     #[test]

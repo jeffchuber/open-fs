@@ -11,8 +11,6 @@ pub struct MountArgs {
     pub mountpoint: PathBuf,
     /// Run in foreground (don't daemonize).
     pub foreground: bool,
-    /// Auto-index on mount.
-    pub auto_index: bool,
 }
 
 /// Run the mount command.
@@ -26,7 +24,7 @@ pub fn run(config: VfsConfig, args: MountArgs) -> Result<(), Box<dyn std::error:
     }
 
     // Create FUSE filesystem
-    let ax = AxFuse::from_config(config)?.with_auto_index(args.auto_index);
+    let ax = AxFuse::from_config(config)?;
 
     // Mount (this blocks until unmount)
     if args.foreground {

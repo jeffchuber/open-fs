@@ -101,38 +101,6 @@ pub enum WriteMode {
     Async,
 }
 
-/// Conflict resolution strategy.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "snake_case")]
-#[non_exhaustive]
-pub enum ConflictStrategy {
-    /// Most recent write wins
-    #[default]
-    LastWriteWins,
-    /// Lock files during edit
-    Lock,
-    /// Create forked versions
-    Fork,
-    /// Attempt to reconcile changes
-    Reconcile,
-}
-
-/// Cache invalidation strategy.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "snake_case")]
-#[non_exhaustive]
-pub enum InvalidationStrategy {
-    /// Time-to-live based
-    #[default]
-    Ttl,
-    /// Periodic polling
-    Poll,
-    /// Pub/sub notifications
-    Pubsub,
-    /// Manual invalidation only
-    Manual,
-}
-
 /// Retry backoff strategy.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
@@ -416,15 +384,6 @@ pub struct ChromaBackendConfig {
     pub collection: Option<String>,
 }
 
-/// API backend configuration (stub).
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct ApiBackendConfig {
-    pub base_url: String,
-    #[serde(default)]
-    pub auth_header: Option<Secret>,
-}
-
 /// Tagged enum for backend configurations.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -436,7 +395,6 @@ pub enum BackendConfig {
     S3(S3BackendConfig),
     Postgres(PostgresBackendConfig),
     Chroma(ChromaBackendConfig),
-    Api(ApiBackendConfig),
 }
 
 /// Chunking configuration.
@@ -520,8 +478,6 @@ pub struct SyncConfig {
     pub interval: Option<HumanDuration>,
     #[serde(default)]
     pub write_mode: WriteMode,
-    #[serde(default)]
-    pub conflict: ConflictStrategy,
 }
 
 /// Watch configuration for file change notifications.

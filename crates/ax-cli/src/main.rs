@@ -190,9 +190,6 @@ enum Commands {
         /// Run in foreground (don't daemonize)
         #[arg(short, long)]
         foreground: bool,
-        /// Auto-index files on mount
-        #[arg(long)]
-        auto_index: bool,
     },
     /// Unmount AX FUSE filesystem
     Unmount {
@@ -378,7 +375,7 @@ async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
         Commands::Tools { format, pretty } => {
             commands::tools::run(&vfs, format, pretty).await?;
         }
-        Commands::Mount { mountpoint, foreground, auto_index } => {
+        Commands::Mount { mountpoint, foreground } => {
             // Mount doesn't need the VFS, it creates its own
             // We need to re-load config for the mount command
             drop(vfs); // Drop the existing VFS
@@ -386,7 +383,6 @@ async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
             let args = commands::mount::MountArgs {
                 mountpoint,
                 foreground,
-                auto_index,
             };
             commands::mount::run(config, args)?;
         }

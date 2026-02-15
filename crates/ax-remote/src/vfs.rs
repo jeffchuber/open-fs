@@ -150,11 +150,6 @@ async fn create_backend(
             .map_err(VfsError::from)?;
             Ok(Arc::new(chroma_backend) as Arc<dyn Backend>)
         }
-        BackendConfig::Api(_) => {
-            Err(VfsError::Config(
-                "API backend not yet implemented".to_string(),
-            ))
-        }
         _ => {
             Err(VfsError::Config(
                 format!("Unsupported backend type for '{}'", name),

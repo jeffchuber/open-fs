@@ -36,9 +36,6 @@ pub struct PendingWrite {
     pub content: Vec<u8>,
     /// Monotonic operation id for ordering/tombstones.
     pub op_id: u64,
-    /// When this write was queued (for future observability/metrics).
-    #[allow(dead_code)]
-    pub queued_at: Instant,
     /// Number of retry attempts.
     pub attempts: u32,
 }
@@ -252,7 +249,7 @@ impl SyncEngine {
             path,
             content,
             op_id,
-            queued_at: Instant::now(),
+
             attempts: 0,
         });
         let pending_len = pending_guard.len();
@@ -311,7 +308,6 @@ impl SyncEngine {
         if let Some(existing) = pending_guard.iter_mut().find(|p| p.path == path) {
             existing.content.extend(content);
             existing.op_id = op_id;
-            existing.queued_at = Instant::now();
         } else {
             if pending_guard.len() >= self.config.max_pending {
                 return Err(VfsError::Config("Sync queue full".to_string()));
@@ -320,7 +316,7 @@ impl SyncEngine {
                 path,
                 content,
                 op_id,
-                queued_at: Instant::now(),
+    
                 attempts: 0,
             });
         }

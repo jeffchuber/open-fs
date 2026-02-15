@@ -54,8 +54,6 @@ pub struct AxFsCore {
     pub inodes: Arc<InodeTable>,
     /// Virtual search directory.
     pub search_dir: Arc<SearchDir>,
-    /// Auto-index on write.
-    pub auto_index: bool,
 }
 
 impl AxFsCore {
@@ -107,14 +105,7 @@ impl AxFsCore {
             vfs: Arc::new(vfs),
             inodes,
             search_dir,
-            auto_index: false,
         })
-    }
-
-    /// Enable auto-indexing on file writes.
-    pub fn with_auto_index(mut self, enabled: bool) -> Self {
-        self.auto_index = enabled;
-        self
     }
 
     /// Get the path for an inode.
@@ -666,22 +657,6 @@ mounts:
         let config = make_test_config(temp_dir.path().to_str().unwrap());
         let core = AxFsCore::from_config(config);
         assert!(core.is_ok());
-    }
-
-    #[test]
-    fn test_core_with_auto_index() {
-        let temp_dir = TempDir::new().unwrap();
-        let config = make_test_config(temp_dir.path().to_str().unwrap());
-        let core = AxFsCore::from_config(config).unwrap().with_auto_index(true);
-        assert!(core.auto_index);
-    }
-
-    #[test]
-    fn test_core_default_auto_index_false() {
-        let temp_dir = TempDir::new().unwrap();
-        let config = make_test_config(temp_dir.path().to_str().unwrap());
-        let core = AxFsCore::from_config(config).unwrap();
-        assert!(!core.auto_index);
     }
 
     #[test]

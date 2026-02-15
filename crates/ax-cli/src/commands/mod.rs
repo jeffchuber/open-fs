@@ -25,8 +25,6 @@ pub mod mount {
         pub mountpoint: PathBuf,
         /// Run in foreground (don't daemonize).
         pub foreground: bool,
-        /// Auto-index on mount.
-        pub auto_index: bool,
     }
 
     /// Run the mount command when FUSE support is disabled.

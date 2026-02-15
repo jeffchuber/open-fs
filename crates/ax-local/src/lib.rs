@@ -11,7 +11,6 @@ pub mod index_state;
 pub mod watcher;
 pub mod work_queue;
 pub mod persistent_worker;
-pub mod index_worker;
 
 // Re-exports
 pub use chunkers::{Chunker, ChunkerConfig};
@@ -27,8 +26,6 @@ pub use index_state::{IndexState, FileInfo, ReconcileAction, ReconcileResult};
 pub use watcher::{ChangeKind, FileChange, WatchEngine};
 pub use work_queue::{WorkQueue, WorkQueueConfig, QueueEventType, QueueItemStatus, QueueItem};
 pub use persistent_worker::{PersistentIndexWorker, PersistentEvent};
-#[allow(deprecated)]
-pub use index_worker::{IndexEvent, IndexWorker};
 
 use thiserror::Error;
 

@@ -66,19 +66,19 @@ jobs:
           key: ${{ runner.os }}-cargo-features-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Build with S3
-        run: cargo build --manifest-path crates/ax-backends/Cargo.toml --features s3
+        run: cargo build -p ax-remote --features s3
 
       - name: Build with Postgres
-        run: cargo build --manifest-path crates/ax-backends/Cargo.toml --features postgres
+        run: cargo build -p ax-remote --features postgres
 
       - name: Build with all backends
-        run: cargo build --manifest-path crates/ax-backends/Cargo.toml --features all-backends
+        run: cargo build -p ax-remote --features all-backends
 
       - name: Build with PDF extractor
         run: cargo build -p ax-local --features extractor-pdf
 
       - name: Test with all features
-        run: cargo test --manifest-path crates/ax-backends/Cargo.toml --features all-backends
+        run: cargo test -p ax-remote --features all-backends
 
   lint:
     name: Lint
