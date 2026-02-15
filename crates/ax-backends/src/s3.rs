@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use aws_sdk_s3::primitives::DateTime as AwsDateTime;
 use chrono::{DateTime, Utc};
 
+use ax_config::Secret;
 use crate::error::BackendError;
 use crate::traits::{Backend, Entry};
 
@@ -19,9 +20,9 @@ pub struct S3Config {
     /// Optional endpoint URL (for S3-compatible services like MinIO).
     pub endpoint: Option<String>,
     /// Access key ID (optional, uses default credentials if not provided).
-    pub access_key_id: Option<String>,
+    pub access_key_id: Option<Secret>,
     /// Secret access key.
-    pub secret_access_key: Option<String>,
+    pub secret_access_key: Option<Secret>,
 }
 
 impl Default for S3Config {
@@ -60,8 +61,8 @@ impl S3Backend {
         // Use custom credentials if provided
         if let (Some(access_key), Some(secret_key)) = (&config.access_key_id, &config.secret_access_key) {
             let credentials = aws_sdk_s3::config::Credentials::new(
-                access_key,
-                secret_key,
+                access_key.expose(),
+                secret_key.expose(),
                 None,
                 None,
                 "ax-s3-backend",

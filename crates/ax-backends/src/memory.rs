@@ -2,14 +2,14 @@ use std::collections::HashMap;
 use std::sync::RwLock;
 
 use async_trait::async_trait;
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 
 use crate::error::BackendError;
 use crate::traits::{Backend, Entry};
 
 /// In-memory backend for testing.
 pub struct MemoryBackend {
-    files: RwLock<HashMap<String, Vec<u8>>>,
+    files: RwLock<HashMap<String, (Vec<u8>, DateTime<Utc>)>>,
 }
 
 impl MemoryBackend {
@@ -30,33 +30,34 @@ impl Default for MemoryBackend {
 #[async_trait]
 impl Backend for MemoryBackend {
     async fn read(&self, path: &str) -> Result<Vec<u8>, BackendError> {
-        let files = self.files.read().unwrap();
+        let files = self.files.read().unwrap_or_else(|e| e.into_inner());
         let normalized = normalize_path(path);
 
         files
             .get(&normalized)
-            .cloned()
+            .map(|(content, _)| content.clone())
             .ok_or_else(|| BackendError::NotFound(path.to_string()))
     }
 
     async fn write(&self, path: &str, content: &[u8]) -> Result<(), BackendError> {
-        let mut files = self.files.write().unwrap();
+        let mut files = self.files.write().unwrap_or_else(|e| e.into_inner());
         let normalized = normalize_path(path);
-        files.insert(normalized, content.to_vec());
+        files.insert(normalized, (content.to_vec(), Utc::now()));
         Ok(())
     }
 
     async fn append(&self, path: &str, content: &[u8]) -> Result<(), BackendError> {
-        let mut files = self.files.write().unwrap();
+        let mut files = self.files.write().unwrap_or_else(|e| e.into_inner());
         let normalized = normalize_path(path);
 
-        let entry = files.entry(normalized).or_default();
-        entry.extend_from_slice(content);
+        let entry = files.entry(normalized).or_insert_with(|| (Vec::new(), Utc::now()));
+        entry.0.extend_from_slice(content);
+        entry.1 = Utc::now();
         Ok(())
     }
 
     async fn delete(&self, path: &str) -> Result<(), BackendError> {
-        let mut files = self.files.write().unwrap();
+        let mut files = self.files.write().unwrap_or_else(|e| e.into_inner());
         let normalized = normalize_path(path);
 
         if files.remove(&normalized).is_some() {
@@ -67,7 +68,7 @@ impl Backend for MemoryBackend {
     }
 
     async fn list(&self, path: &str) -> Result<Vec<Entry>, BackendError> {
-        let files = self.files.read().unwrap();
+        let files = self.files.read().unwrap_or_else(|e| e.into_inner());
         let normalized = normalize_path(path);
         let prefix = if normalized.is_empty() {
             String::new()
@@ -77,7 +78,7 @@ impl Backend for MemoryBackend {
 
         let mut entries = HashMap::new();
 
-        for (file_path, content) in files.iter() {
+        for (file_path, (content, mtime)) in files.iter() {
             let relative = if prefix.is_empty() {
                 file_path.clone()
             } else if file_path.starts_with(&prefix) {
@@ -110,7 +111,7 @@ impl Backend for MemoryBackend {
                         format!("{}{}", if prefix.is_empty() { "" } else { &prefix }, first_component),
                         first_component.to_string(),
                         content.len() as u64,
-                        Some(Utc::now()),
+                        Some(*mtime),
                     ),
                 );
             }
@@ -129,7 +130,7 @@ impl Backend for MemoryBackend {
     }
 
     async fn exists(&self, path: &str) -> Result<bool, BackendError> {
-        let files = self.files.read().unwrap();
+        let files = self.files.read().unwrap_or_else(|e| e.into_inner());
         let normalized = normalize_path(path);
 
         // Check for exact file match
@@ -143,17 +144,17 @@ impl Backend for MemoryBackend {
     }
 
     async fn stat(&self, path: &str) -> Result<Entry, BackendError> {
-        let files = self.files.read().unwrap();
+        let files = self.files.read().unwrap_or_else(|e| e.into_inner());
         let normalized = normalize_path(path);
 
         // Check for exact file match
-        if let Some(content) = files.get(&normalized) {
+        if let Some((content, mtime)) = files.get(&normalized) {
             let name = normalized.rsplit('/').next().unwrap_or(&normalized);
             return Ok(Entry::file(
                 normalized.clone(),
                 name.to_string(),
                 content.len() as u64,
-                Some(Utc::now()),
+                Some(*mtime),
             ));
         }
 
@@ -161,10 +162,23 @@ impl Backend for MemoryBackend {
         let dir_prefix = format!("{}/", normalized);
         if files.keys().any(|k| k.starts_with(&dir_prefix)) {
             let name = normalized.rsplit('/').next().unwrap_or(&normalized).to_string();
-            return Ok(Entry::dir(normalized, name, Some(Utc::now())));
+            return Ok(Entry::dir(normalized, name, None));
         }
 
         Err(BackendError::NotFound(path.to_string()))
+    }
+
+    async fn rename(&self, from: &str, to: &str) -> Result<(), BackendError> {
+        let mut files = self.files.write().unwrap_or_else(|e| e.into_inner());
+        let from_normalized = normalize_path(from);
+        let to_normalized = normalize_path(to);
+
+        let entry = files
+            .remove(&from_normalized)
+            .ok_or_else(|| BackendError::NotFound(from.to_string()))?;
+
+        files.insert(to_normalized, entry);
+        Ok(())
     }
 }
 
@@ -411,5 +425,42 @@ mod tests {
         backend.write("test.txt", b"hello").await.unwrap();
         let content = backend.read("test.txt").await.unwrap();
         assert_eq!(content, b"hello");
+    }
+
+    #[tokio::test]
+    async fn test_rename() {
+        let backend = MemoryBackend::new();
+        backend.write("old.txt", b"content").await.unwrap();
+
+        backend.rename("old.txt", "new.txt").await.unwrap();
+
+        // Old path should not exist
+        assert!(!backend.exists("old.txt").await.unwrap());
+        // New path should exist with same content
+        assert!(backend.exists("new.txt").await.unwrap());
+        let content = backend.read("new.txt").await.unwrap();
+        assert_eq!(content, b"content");
+    }
+
+    #[tokio::test]
+    async fn test_rename_nonexistent() {
+        let backend = MemoryBackend::new();
+        let result = backend.rename("nonexistent.txt", "new.txt").await;
+        assert!(matches!(result, Err(BackendError::NotFound(_))));
+    }
+
+    #[tokio::test]
+    async fn test_rename_overwrites_existing() {
+        let backend = MemoryBackend::new();
+        backend.write("src.txt", b"source").await.unwrap();
+        backend.write("dst.txt", b"destination").await.unwrap();
+
+        backend.rename("src.txt", "dst.txt").await.unwrap();
+
+        // Source should not exist
+        assert!(!backend.exists("src.txt").await.unwrap());
+        // Destination should have source content
+        let content = backend.read("dst.txt").await.unwrap();
+        assert_eq!(content, b"source");
     }
 }

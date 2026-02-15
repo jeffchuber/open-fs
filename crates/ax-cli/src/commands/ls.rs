@@ -1,4 +1,4 @@
-use ax_core::Vfs;
+use ax_remote::Vfs;
 
 pub async fn run(vfs: &Vfs, path: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
     let path = path.as_deref().unwrap_or("/");

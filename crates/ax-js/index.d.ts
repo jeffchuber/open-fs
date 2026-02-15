@@ -14,6 +14,16 @@ export interface JsEntry {
   size: number | null;
 }
 
+/** A single grep match */
+export interface JsGrepMatch {
+  /** Path to the file containing the match */
+  path: string;
+  /** Line number (1-based) */
+  lineNumber: number;
+  /** Matching line content */
+  line: string;
+}
+
 /** AX Virtual Filesystem */
 export class JsVfs {
   /**
@@ -107,6 +117,28 @@ export class JsVfs {
    * Get mount paths.
    */
   mounts(): string[];
+
+  /**
+   * Rename/move a file.
+   * @param from - Source path
+   * @param to - Destination path
+   */
+  rename(from: string, to: string): void;
+
+  /**
+   * Copy a file. Returns the number of bytes copied.
+   * @param src - Source path
+   * @param dst - Destination path
+   */
+  copy(src: string, dst: string): number;
+
+  /**
+   * Search files for lines matching a regex pattern.
+   * @param pattern - Regular expression pattern
+   * @param path - Path to search (default: "/")
+   * @param recursive - Whether to search recursively (default: false)
+   */
+  grep(pattern: string, path?: string, recursive?: boolean): JsGrepMatch[];
 }
 
 /**

@@ -36,8 +36,10 @@ pub struct ToolDefinition {
 
 /// Output format for tool definitions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default)]
 pub enum ToolFormat {
     /// JSON format (generic).
+    #[default]
     Json,
     /// MCP format for Claude/Anthropic.
     Mcp,
@@ -45,11 +47,6 @@ pub enum ToolFormat {
     OpenAi,
 }
 
-impl Default for ToolFormat {
-    fn default() -> Self {
-        ToolFormat::Json
-    }
-}
 
 impl std::str::FromStr for ToolFormat {
     type Err = String;
@@ -382,6 +379,7 @@ mod tests {
                 read_only: false,
                 index: None,
                 sync: None,
+                watch: None,
             }],
             defaults: None,
         }

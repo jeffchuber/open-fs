@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
-use ax_backends::ChromaBackend;
-use ax_core::{IndexingPipeline, PipelineConfig, SearchConfig, SearchEngine, SearchMode, Vfs};
+use ax_core::ChromaStore;
+use ax_local::{IndexingPipeline, PipelineConfig, SearchConfig, SearchEngine, SearchMode};
+use ax_remote::{ChromaHttpBackend, Vfs};
 
 pub async fn run(
     _vfs: &Vfs,
@@ -20,13 +21,13 @@ pub async fn run(
     let collection_name = collection.unwrap_or_else(|| "ax_index".to_string());
 
     // Connect to Chroma
-    let chroma = ChromaBackend::new(&chroma_endpoint, &collection_name).await
+    let chroma = ChromaHttpBackend::new(&chroma_endpoint, &collection_name).await
         .map_err(|e| format!("Failed to connect to Chroma: {}", e))?;
 
     // Create pipeline and search engine
     let config = PipelineConfig::default();
     let pipeline = Arc::new(IndexingPipeline::new(config)?);
-    let engine = SearchEngine::new(pipeline).with_chroma(Arc::new(chroma));
+    let engine = SearchEngine::new(pipeline).with_chroma(Arc::new(chroma) as Arc<dyn ChromaStore>);
 
     // Parse search mode
     let search_mode = match mode.as_deref() {

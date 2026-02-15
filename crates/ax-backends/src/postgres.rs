@@ -2,14 +2,40 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use sqlx::{postgres::PgPoolOptions, PgPool};
 
+use ax_config::Secret;
 use crate::error::BackendError;
 use crate::traits::{Backend, Entry};
+
+/// Validate that a table name is safe for use in SQL identifiers.
+///
+/// Only allows alphanumeric characters and underscores, must start with
+/// a letter or underscore, and must be at most 63 characters (PostgreSQL limit).
+fn validate_table_name(name: &str) -> Result<(), BackendError> {
+    if name.is_empty() {
+        return Err(BackendError::Other("Table name cannot be empty".to_string()));
+    }
+    if name.len() > 63 {
+        return Err(BackendError::Other(format!(
+            "Table name '{}' exceeds maximum length of 63 characters",
+            name
+        )));
+    }
+    let is_valid = name.starts_with(|c: char| c.is_ascii_alphabetic() || c == '_')
+        && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+    if !is_valid {
+        return Err(BackendError::Other(format!(
+            "Invalid table name '{}': must match ^[a-zA-Z_][a-zA-Z0-9_]*$",
+            name
+        )));
+    }
+    Ok(())
+}
 
 /// PostgreSQL storage backend configuration.
 #[derive(Debug, Clone)]
 pub struct PostgresConfig {
     /// Database connection URL (e.g., postgres://user:pass@host/db)
-    pub connection_url: String,
+    pub connection_url: Secret,
     /// Table name for storing files (default: "ax_files")
     pub table_name: String,
     /// Maximum number of connections in the pool
@@ -19,7 +45,7 @@ pub struct PostgresConfig {
 impl Default for PostgresConfig {
     fn default() -> Self {
         PostgresConfig {
-            connection_url: String::new(),
+            connection_url: Secret::new(""),
             table_name: "ax_files".to_string(),
             max_connections: 5,
         }
@@ -45,9 +71,12 @@ pub struct PostgresBackend {
 impl PostgresBackend {
     /// Create a new Postgres backend with the given configuration.
     pub async fn new(config: PostgresConfig) -> Result<Self, BackendError> {
+        // Validate table name to prevent SQL injection
+        validate_table_name(&config.table_name)?;
+
         let pool = PgPoolOptions::new()
             .max_connections(config.max_connections)
-            .connect(&config.connection_url)
+            .connect(config.connection_url.expose())
             .await
             .map_err(|e| BackendError::Other(format!("Postgres connection failed: {}", e)))?;
 
@@ -305,5 +334,72 @@ mod tests {
         assert_eq!(PostgresBackend::filename("/dir/file.txt"), "file.txt");
         assert_eq!(PostgresBackend::filename("file.txt"), "file.txt");
         assert_eq!(PostgresBackend::filename("/a/b/c.rs"), "c.rs");
+    }
+
+    // SQL injection prevention tests
+
+    #[test]
+    fn test_valid_table_names() {
+        assert!(validate_table_name("ax_files").is_ok());
+        assert!(validate_table_name("_private").is_ok());
+        assert!(validate_table_name("Table123").is_ok());
+        assert!(validate_table_name("a").is_ok());
+    }
+
+    #[test]
+    fn test_sql_injection_drop_table() {
+        assert!(validate_table_name("\"; DROP TABLE --").is_err());
+    }
+
+    #[test]
+    fn test_sql_injection_semicolon() {
+        assert!(validate_table_name("ax_files; DROP TABLE users").is_err());
+    }
+
+    #[test]
+    fn test_sql_injection_quotes() {
+        assert!(validate_table_name("ax_files'--").is_err());
+    }
+
+    #[test]
+    fn test_sql_injection_parentheses() {
+        assert!(validate_table_name("ax_files()").is_err());
+    }
+
+    #[test]
+    fn test_table_name_empty() {
+        assert!(validate_table_name("").is_err());
+    }
+
+    #[test]
+    fn test_table_name_starts_with_number() {
+        assert!(validate_table_name("123table").is_err());
+    }
+
+    #[test]
+    fn test_table_name_with_spaces() {
+        assert!(validate_table_name("my table").is_err());
+    }
+
+    #[test]
+    fn test_table_name_with_dash() {
+        assert!(validate_table_name("my-table").is_err());
+    }
+
+    #[test]
+    fn test_table_name_with_dot() {
+        assert!(validate_table_name("schema.table").is_err());
+    }
+
+    #[test]
+    fn test_table_name_too_long() {
+        let long_name = "a".repeat(64);
+        assert!(validate_table_name(&long_name).is_err());
+    }
+
+    #[test]
+    fn test_table_name_max_length() {
+        let max_name = "a".repeat(63);
+        assert!(validate_table_name(&max_name).is_ok());
     }
 }

@@ -4,7 +4,7 @@ use std::sync::Arc;
 use tokio::runtime::Runtime;
 
 use ax_config::VfsConfig;
-use ax_core::{Vfs, VfsError, generate_tools, format_tools, ToolFormat};
+use ax_core::{Vfs, VfsError, GrepOptions, generate_tools, format_tools, ToolFormat};
 
 /// Python wrapper for VfsError
 fn vfs_error_to_py(err: VfsError) -> PyErr {
@@ -33,6 +33,25 @@ impl PyEntry {
         } else {
             format!("Entry(path='{}', size={})", self.path, self.size.unwrap_or(0))
         }
+    }
+}
+
+/// A single grep match.
+#[pyclass]
+#[derive(Clone)]
+pub struct PyGrepMatch {
+    #[pyo3(get)]
+    pub path: String,
+    #[pyo3(get)]
+    pub line_number: usize,
+    #[pyo3(get)]
+    pub line: String,
+}
+
+#[pymethods]
+impl PyGrepMatch {
+    fn __repr__(&self) -> String {
+        format!("GrepMatch(path='{}', line_number={}, line='{}')", self.path, self.line_number, self.line)
     }
 }
 
@@ -220,6 +239,54 @@ impl PyVfs {
             .collect()
     }
 
+    /// Rename/move a file.
+    fn rename(&self, from_path: &str, to_path: &str) -> PyResult<()> {
+        let vfs = Arc::clone(&self.vfs);
+        let from = from_path.to_string();
+        let to = to_path.to_string();
+
+        self.runtime.block_on(async move {
+            vfs.rename(&from, &to).await
+        }).map_err(vfs_error_to_py)
+    }
+
+    /// Copy a file. Returns the number of bytes copied.
+    fn copy(&self, src: &str, dst: &str) -> PyResult<usize> {
+        let vfs = Arc::clone(&self.vfs);
+        let src = src.to_string();
+        let dst = dst.to_string();
+
+        self.runtime.block_on(async move {
+            let content = vfs.read(&src).await?;
+            let len = content.len();
+            vfs.write(&dst, &content).await?;
+            Ok::<_, VfsError>(len)
+        }).map_err(vfs_error_to_py)
+    }
+
+    /// Search files for lines matching a regex pattern.
+    #[pyo3(signature = (pattern, path=None, recursive=None))]
+    fn grep(&self, pattern: &str, path: Option<&str>, recursive: Option<bool>) -> PyResult<Vec<PyGrepMatch>> {
+        let vfs = Arc::clone(&self.vfs);
+        let pattern = pattern.to_string();
+        let path = path.unwrap_or("/").to_string();
+        let recursive = recursive.unwrap_or(false);
+
+        let matches = self.runtime.block_on(async move {
+            let opts = GrepOptions {
+                recursive,
+                ..Default::default()
+            };
+            ax_core::grep(&vfs, &pattern, &path, &opts).await
+        }).map_err(vfs_error_to_py)?;
+
+        Ok(matches.into_iter().map(|m| PyGrepMatch {
+            path: m.path,
+            line_number: m.line_number,
+            line: m.line,
+        }).collect())
+    }
+
     fn __repr__(&self) -> String {
         let name = self.name().unwrap_or_else(|| "unnamed".to_string());
         let mounts = self.mounts();
@@ -244,6 +311,7 @@ fn load_config_file(path: &str) -> PyResult<PyVfs> {
 fn ax(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyVfs>()?;
     m.add_class::<PyEntry>()?;
+    m.add_class::<PyGrepMatch>()?;
     m.add_function(wrap_pyfunction!(load_config, m)?)?;
     m.add_function(wrap_pyfunction!(load_config_file, m)?)?;
     Ok(())

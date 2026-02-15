@@ -1,4 +1,4 @@
-use ax_core::Vfs;
+use ax_remote::Vfs;
 
 pub async fn run(vfs: &Vfs, path: &str) -> Result<(), Box<dyn std::error::Error>> {
     let content = vfs.read(path).await?;

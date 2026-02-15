@@ -1,4 +1,5 @@
 pub mod chunkers;
+pub mod content_hash;
 pub mod embedders;
 pub mod extractors;
 pub mod sparse;
@@ -7,6 +8,7 @@ pub mod types;
 pub use chunkers::{Chunker, ChunkerConfig};
 pub use embedders::{Embedder, EmbedderConfig};
 pub use extractors::{create_extractors, TextExtractor};
+pub use content_hash::{content_hash, content_hash_streaming};
 pub use sparse::SparseEncoder;
 pub use types::*;
 

@@ -3,9 +3,58 @@ use serde::{Deserialize, Deserializer, Serialize};
 use std::fmt;
 use std::str::FromStr;
 
+/// A wrapper type for sensitive values (API keys, passwords, connection strings)
+/// that redacts the value in `Debug` and `Display` output to prevent accidental
+/// logging of credentials.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct Secret(String);
+
+impl Secret {
+    /// Create a new secret from a string.
+    pub fn new(value: impl Into<String>) -> Self {
+        Secret(value.into())
+    }
+
+    /// Get the secret value. Use sparingly and never log the result.
+    pub fn expose(&self) -> &str {
+        &self.0
+    }
+
+    /// Consume the wrapper and return the inner string.
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+}
+
+impl fmt::Debug for Secret {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("Secret(***)")
+    }
+}
+
+impl fmt::Display for Secret {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("***")
+    }
+}
+
+impl From<String> for Secret {
+    fn from(s: String) -> Self {
+        Secret(s)
+    }
+}
+
+impl From<&str> for Secret {
+    fn from(s: &str) -> Self {
+        Secret(s.to_string())
+    }
+}
+
 /// Mount mode determines how data flows between local and remote.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum MountMode {
     /// Local-only, no syncing
     Local,
@@ -27,6 +76,7 @@ pub enum MountMode {
 /// Search mode for queries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum SearchMode {
     /// Vector similarity search
     #[default]
@@ -42,6 +92,7 @@ pub enum SearchMode {
 /// Write synchronization mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum WriteMode {
     /// Wait for write to complete
     #[default]
@@ -53,6 +104,7 @@ pub enum WriteMode {
 /// Conflict resolution strategy.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum ConflictStrategy {
     /// Most recent write wins
     #[default]
@@ -68,6 +120,7 @@ pub enum ConflictStrategy {
 /// Cache invalidation strategy.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum InvalidationStrategy {
     /// Time-to-live based
     #[default]
@@ -83,6 +136,7 @@ pub enum InvalidationStrategy {
 /// Retry backoff strategy.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum BackoffStrategy {
     /// Fixed delay between retries
     Fixed,
@@ -96,6 +150,7 @@ pub enum BackoffStrategy {
 /// Chunking strategy for text splitting.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum ChunkStrategy {
     /// Fixed-size chunks
     #[default]
@@ -113,6 +168,7 @@ pub enum ChunkStrategy {
 /// Chunking granularity for code.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum ChunkGranularity {
     /// Entire file
     File,
@@ -128,6 +184,7 @@ pub enum ChunkGranularity {
 /// Embedding provider.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum EmbeddingProvider {
     /// Local Ollama
     #[default]
@@ -311,12 +368,19 @@ impl<'de> Deserialize<'de> for HumanBytes {
 
 /// Local filesystem backend configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct FsBackendConfig {
     pub root: String,
 }
 
+/// In-memory backend configuration.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
+pub struct MemoryBackendConfig {}
+
 /// S3 backend configuration (stub).
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct S3BackendConfig {
     pub bucket: String,
     #[serde(default)]
@@ -325,18 +389,27 @@ pub struct S3BackendConfig {
     pub region: Option<String>,
     #[serde(default)]
     pub endpoint: Option<String>,
+    #[serde(default)]
+    pub access_key_id: Option<Secret>,
+    #[serde(default)]
+    pub secret_access_key: Option<Secret>,
 }
 
 /// Postgres backend configuration (stub).
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct PostgresBackendConfig {
-    pub connection_string: String,
+    #[serde(alias = "connection_string")]
+    pub connection_url: Secret,
+    #[serde(default, alias = "table")]
+    pub table_name: Option<String>,
     #[serde(default)]
-    pub table: Option<String>,
+    pub max_connections: Option<u32>,
 }
 
 /// Chroma backend configuration (stub).
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ChromaBackendConfig {
     pub url: String,
     #[serde(default)]
@@ -345,25 +418,90 @@ pub struct ChromaBackendConfig {
 
 /// API backend configuration (stub).
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ApiBackendConfig {
     pub base_url: String,
     #[serde(default)]
-    pub auth_header: Option<String>,
+    pub auth_header: Option<Secret>,
+}
+
+/// WebDAV backend configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WebDavBackendConfig {
+    pub url: String,
+    #[serde(default)]
+    pub username: Option<String>,
+    #[serde(default)]
+    pub password: Option<Secret>,
+    #[serde(default)]
+    pub prefix: Option<String>,
+}
+
+/// SFTP backend configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SftpBackendConfig {
+    pub host: String,
+    #[serde(default = "default_sftp_port")]
+    pub port: u16,
+    pub username: String,
+    #[serde(default)]
+    pub password: Option<Secret>,
+    #[serde(default)]
+    pub private_key: Option<String>,
+    #[serde(default)]
+    pub root: Option<String>,
+}
+
+fn default_sftp_port() -> u16 {
+    22
+}
+
+/// Google Cloud Storage backend configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GcsBackendConfig {
+    pub bucket: String,
+    #[serde(default)]
+    pub prefix: Option<String>,
+    #[serde(default)]
+    pub credentials_file: Option<String>,
+}
+
+/// Azure Blob Storage backend configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AzureBlobBackendConfig {
+    pub container: String,
+    pub account: String,
+    #[serde(default)]
+    pub access_key: Option<Secret>,
+    #[serde(default)]
+    pub prefix: Option<String>,
 }
 
 /// Tagged enum for backend configurations.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum BackendConfig {
     Fs(FsBackendConfig),
+    #[serde(rename = "memory", alias = "mem")]
+    Memory(MemoryBackendConfig),
     S3(S3BackendConfig),
     Postgres(PostgresBackendConfig),
     Chroma(ChromaBackendConfig),
     Api(ApiBackendConfig),
+    WebDav(WebDavBackendConfig),
+    Sftp(SftpBackendConfig),
+    Gcs(GcsBackendConfig),
+    AzureBlob(AzureBlobBackendConfig),
 }
 
 /// Chunking configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ChunkConfig {
     #[serde(default)]
     pub strategy: ChunkStrategy,
@@ -396,6 +534,7 @@ impl Default for ChunkConfig {
 
 /// Embedding configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct EmbeddingConfig {
     #[serde(default)]
     pub provider: EmbeddingProvider,
@@ -421,6 +560,7 @@ impl Default for EmbeddingConfig {
 
 /// Indexing configuration for a mount.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 pub struct IndexConfig {
     #[serde(default)]
     pub enabled: bool,
@@ -434,6 +574,7 @@ pub struct IndexConfig {
 
 /// Sync configuration for a mount.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 pub struct SyncConfig {
     #[serde(default)]
     pub interval: Option<HumanDuration>,
@@ -443,8 +584,58 @@ pub struct SyncConfig {
     pub conflict: ConflictStrategy,
 }
 
+/// Watch configuration for file change notifications.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WatchConfig {
+    /// Use native OS file watching (inotify/FSEvents). Defaults to true.
+    #[serde(default = "default_true")]
+    pub native: bool,
+    /// Polling interval (used when native is false or as fallback).
+    #[serde(default)]
+    pub poll_interval: Option<HumanDuration>,
+    /// Debounce interval before emitting change events. Defaults to 500ms.
+    #[serde(default = "default_debounce")]
+    pub debounce: HumanDuration,
+    /// Automatically re-index changed files.
+    #[serde(default)]
+    pub auto_index: bool,
+    /// Webhook URL to POST change notifications to.
+    #[serde(default)]
+    pub webhook_url: Option<String>,
+    /// File patterns to include in watching.
+    #[serde(default)]
+    pub include: Vec<String>,
+    /// File patterns to exclude from watching.
+    #[serde(default)]
+    pub exclude: Vec<String>,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+fn default_debounce() -> HumanDuration {
+    HumanDuration(std::time::Duration::from_millis(500))
+}
+
+impl Default for WatchConfig {
+    fn default() -> Self {
+        WatchConfig {
+            native: true,
+            poll_interval: None,
+            debounce: default_debounce(),
+            auto_index: false,
+            webhook_url: None,
+            include: Vec::new(),
+            exclude: Vec::new(),
+        }
+    }
+}
+
 /// Mount configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct MountConfig {
     pub path: String,
     #[serde(default)]
@@ -459,10 +650,13 @@ pub struct MountConfig {
     pub index: Option<IndexConfig>,
     #[serde(default)]
     pub sync: Option<SyncConfig>,
+    #[serde(default)]
+    pub watch: Option<WatchConfig>,
 }
 
 /// Top-level VFS configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct VfsConfig {
     #[serde(default)]
     pub name: Option<String>,
@@ -478,6 +672,7 @@ pub struct VfsConfig {
 
 /// Global defaults configuration.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 pub struct DefaultsConfig {
     #[serde(default)]
     pub chunk: Option<ChunkConfig>,
@@ -485,6 +680,8 @@ pub struct DefaultsConfig {
     pub embedding: Option<EmbeddingConfig>,
     #[serde(default)]
     pub sync: Option<SyncConfig>,
+    #[serde(default)]
+    pub watch: Option<WatchConfig>,
 }
 
 impl Default for VfsConfig {
@@ -521,6 +718,49 @@ mod tests {
             HumanDuration::from_str("1h").unwrap().as_duration(),
             std::time::Duration::from_secs(3600)
         );
+    }
+
+    #[test]
+    fn test_secret_redacts_debug() {
+        let secret = Secret::new("my-api-key-12345");
+        let debug_output = format!("{:?}", secret);
+        assert_eq!(debug_output, "Secret(***)");
+        assert!(!debug_output.contains("my-api-key"));
+    }
+
+    #[test]
+    fn test_secret_redacts_display() {
+        let secret = Secret::new("super-secret-password");
+        let display_output = format!("{}", secret);
+        assert_eq!(display_output, "***");
+        assert!(!display_output.contains("super-secret"));
+    }
+
+    #[test]
+    fn test_secret_expose() {
+        let secret = Secret::new("my-value");
+        assert_eq!(secret.expose(), "my-value");
+    }
+
+    #[test]
+    fn test_secret_serde_roundtrip() {
+        let secret = Secret::new("test-key");
+        let json = serde_json::to_string(&secret).unwrap();
+        assert_eq!(json, "\"test-key\"");
+        let deserialized: Secret = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.expose(), "test-key");
+    }
+
+    #[test]
+    fn test_postgres_config_redacts_connection_url() {
+        let config = PostgresBackendConfig {
+            connection_url: Secret::new("postgres://user:password@host/db"),
+            table_name: None,
+            max_connections: None,
+        };
+        let debug = format!("{:?}", config);
+        assert!(!debug.contains("password"));
+        assert!(debug.contains("Secret(***)"));
     }
 
     #[test]

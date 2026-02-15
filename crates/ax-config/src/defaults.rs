@@ -67,7 +67,11 @@ fn infer_mode(
         .and_then(|name| backends.get(name));
 
     let is_remote = backend_config
-        .map(|cfg| matches!(cfg, BackendConfig::S3(_) | BackendConfig::Chroma(_) | BackendConfig::Api(_)))
+        .map(|cfg| matches!(cfg,
+            BackendConfig::S3(_) | BackendConfig::Chroma(_) | BackendConfig::Api(_)
+            | BackendConfig::WebDav(_) | BackendConfig::Sftp(_) | BackendConfig::Gcs(_)
+            | BackendConfig::AzureBlob(_)
+        ))
         .unwrap_or(false);
 
     if mount.read_only {
@@ -168,6 +172,7 @@ mod tests {
                 read_only: false,
                 index: None,
                 sync: None,
+                watch: None,
             }],
             ..Default::default()
         };

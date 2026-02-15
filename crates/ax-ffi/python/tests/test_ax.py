@@ -547,5 +547,114 @@ mounts:
         assert final == "iteration_49"
 
 
+class TestRenameAndCopy:
+    """Tests for rename and copy operations."""
+
+    @pytest.fixture
+    def vfs(self):
+        """Create a VFS instance for testing."""
+        self.tmpdir = tempfile.mkdtemp()
+        config = f"""
+name: test-vfs
+backends:
+  local:
+    type: fs
+    root: {self.tmpdir}
+mounts:
+  - path: /workspace
+    backend: local
+"""
+        vfs = ax.load_config(config)
+        yield vfs
+        import shutil
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_rename_file(self, vfs):
+        """Test renaming a file."""
+        vfs.write_text("/workspace/original.txt", "content")
+        vfs.rename("/workspace/original.txt", "/workspace/renamed.txt")
+        assert not vfs.exists("/workspace/original.txt")
+        assert vfs.exists("/workspace/renamed.txt")
+        assert vfs.read_text("/workspace/renamed.txt") == "content"
+
+    def test_copy_file(self, vfs):
+        """Test copying a file."""
+        vfs.write_text("/workspace/src.txt", "copy me")
+        bytes_copied = vfs.copy("/workspace/src.txt", "/workspace/dst.txt")
+        assert bytes_copied == 7
+        assert vfs.exists("/workspace/src.txt")
+        assert vfs.exists("/workspace/dst.txt")
+        assert vfs.read_text("/workspace/dst.txt") == "copy me"
+
+    def test_copy_nonexistent(self, vfs):
+        """Test copying a file that doesn't exist."""
+        with pytest.raises(IOError):
+            vfs.copy("/workspace/nonexistent.txt", "/workspace/dst.txt")
+
+
+class TestGrep:
+    """Tests for grep operations."""
+
+    @pytest.fixture
+    def vfs(self):
+        """Create a VFS instance for testing."""
+        self.tmpdir = tempfile.mkdtemp()
+        config = f"""
+name: test-vfs
+backends:
+  local:
+    type: fs
+    root: {self.tmpdir}
+mounts:
+  - path: /workspace
+    backend: local
+"""
+        vfs = ax.load_config(config)
+        yield vfs
+        import shutil
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_grep_single_file(self, vfs):
+        """Test grep on a single file."""
+        vfs.write_text("/workspace/test.txt", "hello world\nfoo bar\nhello again")
+        matches = vfs.grep("hello", "/workspace/test.txt")
+        assert len(matches) == 2
+        assert matches[0].line_number == 1
+        assert matches[1].line_number == 3
+
+    def test_grep_directory(self, vfs):
+        """Test grep on a directory."""
+        vfs.write_text("/workspace/a.txt", "hello world")
+        vfs.write_text("/workspace/b.txt", "goodbye world")
+        matches = vfs.grep("hello", "/workspace")
+        assert len(matches) == 1
+
+    def test_grep_recursive(self, vfs):
+        """Test grep with recursion."""
+        vfs.write_text("/workspace/a.txt", "hello top")
+        vfs.write_text("/workspace/sub/b.txt", "hello nested")
+        matches = vfs.grep("hello", "/workspace", True)
+        assert len(matches) == 2
+
+    def test_grep_no_matches(self, vfs):
+        """Test grep with no matches."""
+        vfs.write_text("/workspace/test.txt", "hello world")
+        matches = vfs.grep("notfound", "/workspace/test.txt")
+        assert len(matches) == 0
+
+    def test_grep_match_attributes(self, vfs):
+        """Test that GrepMatch has expected attributes."""
+        vfs.write_text("/workspace/test.txt", "hello world")
+        matches = vfs.grep("hello", "/workspace/test.txt")
+        assert len(matches) == 1
+        m = matches[0]
+        assert hasattr(m, "path")
+        assert hasattr(m, "line_number")
+        assert hasattr(m, "line")
+        assert m.path == "/workspace/test.txt"
+        assert m.line_number == 1
+        assert "hello" in m.line
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

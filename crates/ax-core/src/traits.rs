@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 
-use crate::error::VfsError;
+use crate::error::BackendError;
 
 /// Metadata about a file or directory entry.
 #[derive(Debug, Clone)]
@@ -42,40 +42,38 @@ impl Entry {
     }
 }
 
-/// Convert from ax_backends::Entry to our Entry.
-impl From<ax_backends::Entry> for Entry {
-    fn from(e: ax_backends::Entry) -> Self {
-        Entry {
-            path: e.path,
-            name: e.name,
-            is_dir: e.is_dir,
-            size: e.size,
-            modified: e.modified,
-        }
-    }
-}
-
 /// Trait for VFS backend implementations.
 #[async_trait]
 pub trait Backend: Send + Sync + 'static {
     /// Read the contents of a file.
-    async fn read(&self, path: &str) -> Result<Vec<u8>, VfsError>;
+    async fn read(&self, path: &str) -> Result<Vec<u8>, BackendError>;
 
     /// Write content to a file, creating it if it doesn't exist.
-    async fn write(&self, path: &str, content: &[u8]) -> Result<(), VfsError>;
+    async fn write(&self, path: &str, content: &[u8]) -> Result<(), BackendError>;
 
     /// Append content to a file.
-    async fn append(&self, path: &str, content: &[u8]) -> Result<(), VfsError>;
+    async fn append(&self, path: &str, content: &[u8]) -> Result<(), BackendError>;
 
     /// Delete a file.
-    async fn delete(&self, path: &str) -> Result<(), VfsError>;
+    async fn delete(&self, path: &str) -> Result<(), BackendError>;
 
     /// List entries in a directory.
-    async fn list(&self, path: &str) -> Result<Vec<Entry>, VfsError>;
+    async fn list(&self, path: &str) -> Result<Vec<Entry>, BackendError>;
 
     /// Check if a path exists.
-    async fn exists(&self, path: &str) -> Result<bool, VfsError>;
+    async fn exists(&self, path: &str) -> Result<bool, BackendError>;
 
     /// Get metadata for a path.
-    async fn stat(&self, path: &str) -> Result<Entry, VfsError>;
+    async fn stat(&self, path: &str) -> Result<Entry, BackendError>;
+
+    /// Rename/move a file or directory.
+    ///
+    /// Default implementation uses read-write-delete which is not atomic.
+    /// Backends should override this with native rename when available.
+    async fn rename(&self, from: &str, to: &str) -> Result<(), BackendError> {
+        let content = self.read(from).await?;
+        self.write(to, &content).await?;
+        self.delete(from).await?;
+        Ok(())
+    }
 }

@@ -3,9 +3,13 @@ resolver = "2"
 members = [
     "crates/ax-config",
     "crates/ax-core",
-    "crates/ax-backends",
-    "crates/ax-indexing",
+    "crates/ax-local",
+    "crates/ax-remote",
+    "crates/ax-fuse",
+    "crates/ax-mcp",
+    "crates/ax-server",
     "crates/ax-cli",
+    "crates/ax-sim",
 ]
 
 # ax-ffi is excluded from default workspace build
@@ -16,9 +20,11 @@ members = [
 #
 # ax-js is excluded as it requires napi-cli and Node.js headers
 # Build with: cd crates/ax-js && npm install && npm run build
-exclude = ["crates/ax-ffi", "crates/ax-js"]
+exclude = ["crates/ax-ffi", "crates/ax-js", "crates/ax-backends", "crates/ax-indexing"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.3.0"
 edition = "2021"
 license = "MIT"
+repository = "https://github.com/ax-vfs/ax"
+keywords = ["vfs", "filesystem", "storage", "indexing"]

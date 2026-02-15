@@ -6,7 +6,7 @@ use std::sync::Arc;
 use tokio::runtime::Runtime;
 
 use ax_config::VfsConfig;
-use ax_core::{format_tools, generate_tools, ToolFormat, Vfs, VfsError};
+use ax_core::{format_tools, generate_tools, GrepMatch, GrepOptions, ToolFormat, Vfs, VfsError};
 
 /// Convert VfsError to napi Error
 fn vfs_error_to_napi(err: VfsError) -> Error {
@@ -20,6 +20,14 @@ pub struct JsEntry {
     pub name: String,
     pub is_dir: bool,
     pub size: Option<i64>,
+}
+
+/// A single grep match.
+#[napi(object)]
+pub struct JsGrepMatch {
+    pub path: String,
+    pub line_number: u32,
+    pub line: String,
 }
 
 /// AX Virtual Filesystem for JavaScript/TypeScript.
@@ -234,6 +242,65 @@ impl JsVfs {
             .map(|m| m.path.clone())
             .collect()
     }
+
+    /// Rename/move a file.
+    #[napi]
+    pub fn rename(&self, from: String, to: String) -> Result<()> {
+        let vfs = Arc::clone(&self.vfs);
+
+        self.runtime
+            .block_on(async move { vfs.rename(&from, &to).await })
+            .map_err(vfs_error_to_napi)
+    }
+
+    /// Copy a file. Returns the number of bytes copied.
+    #[napi]
+    pub fn copy(&self, src: String, dst: String) -> Result<i64> {
+        let vfs = Arc::clone(&self.vfs);
+
+        self.runtime
+            .block_on(async move {
+                let content = vfs.read(&src).await?;
+                let len = content.len();
+                vfs.write(&dst, &content).await?;
+                Ok::<_, VfsError>(len as i64)
+            })
+            .map_err(vfs_error_to_napi)
+    }
+
+    /// Search files for lines matching a regex pattern.
+    #[napi]
+    pub fn grep(
+        &self,
+        pattern: String,
+        path: Option<String>,
+        recursive: Option<bool>,
+    ) -> Result<Vec<JsGrepMatch>> {
+        let vfs = Arc::clone(&self.vfs);
+        let path = path.unwrap_or_else(|| "/".to_string());
+        let recursive = recursive.unwrap_or(false);
+
+        let matches = self
+            .runtime
+            .block_on(async move {
+                let opts = GrepOptions {
+                    recursive,
+                    ..Default::default()
+                };
+                ax_core::grep(&vfs, &pattern, &path, &opts).await
+            })
+            .map_err(vfs_error_to_napi)?;
+
+        Ok(matches
+            .into_iter()
+            .map(|m| JsGrepMatch {
+                path: m.path,
+                line_number: m.line_number as u32,
+                line: m.line,
+            })
+            .collect())
+    }
+
 }
 
 /// Parse a YAML configuration string and return a VFS.

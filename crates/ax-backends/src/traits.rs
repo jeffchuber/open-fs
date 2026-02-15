@@ -65,4 +65,15 @@ pub trait Backend: Send + Sync + 'static {
 
     /// Get metadata for a path.
     async fn stat(&self, path: &str) -> Result<Entry, BackendError>;
+
+    /// Rename/move a file or directory.
+    ///
+    /// Default implementation uses read-write-delete which is not atomic.
+    /// Backends should override this with native rename when available.
+    async fn rename(&self, from: &str, to: &str) -> Result<(), BackendError> {
+        let content = self.read(from).await?;
+        self.write(to, &content).await?;
+        self.delete(from).await?;
+        Ok(())
+    }
 }

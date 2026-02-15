@@ -25,6 +25,7 @@ Example:
 from .ax import (
     Vfs as PyVfs,
     Entry as PyEntry,
+    GrepMatch as PyGrepMatch,
     load_config,
     load_config_file,
 )
@@ -32,12 +33,15 @@ from .ax import (
 # Aliases
 Vfs = PyVfs
 Entry = PyEntry
+GrepMatch = PyGrepMatch
 
 __all__ = [
     "Vfs",
     "Entry",
+    "GrepMatch",
     "PyVfs",
     "PyEntry",
+    "PyGrepMatch",
     "load_config",
     "load_config_file",
 ]

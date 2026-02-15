@@ -43,7 +43,7 @@ impl PlainTextExtractor {
     fn is_likely_binary(content: &[u8]) -> bool {
         // Check first 8KB for null bytes (common in binary files)
         let check_len = content.len().min(8192);
-        content[..check_len].iter().any(|&b| b == 0)
+        content[..check_len].contains(&0)
     }
 }
 

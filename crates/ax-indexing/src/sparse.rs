@@ -1,7 +1,9 @@
 use crate::{IndexingError, SparseVector};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// BM25 sparse encoder for keyword search.
+#[derive(Serialize, Deserialize)]
 pub struct SparseEncoder {
     /// Term to index mapping.
     vocab: HashMap<String, u32>,
@@ -169,6 +171,16 @@ impl SparseEncoder {
     /// Get vocabulary size.
     pub fn vocab_size(&self) -> usize {
         self.vocab.len()
+    }
+
+    /// Serialize encoder state to JSON.
+    pub fn to_json(&self) -> Result<String, IndexingError> {
+        serde_json::to_string(self).map_err(IndexingError::JsonError)
+    }
+
+    /// Deserialize encoder state from JSON.
+    pub fn from_json(s: &str) -> Result<Self, IndexingError> {
+        serde_json::from_str(s).map_err(IndexingError::JsonError)
     }
 }
 
@@ -414,5 +426,33 @@ mod tests {
         let avg2 = encoder.avg_doc_len;
 
         assert!(avg2 > avg1);
+    }
+
+    #[test]
+    fn test_to_json_from_json_roundtrip() {
+        let mut encoder = SparseEncoder::new();
+        encoder.update_idf("the quick brown fox");
+        encoder.update_idf("the lazy dog");
+        encoder.update_idf("the quick dog jumps");
+
+        let json = encoder.to_json().unwrap();
+        let restored = SparseEncoder::from_json(&json).unwrap();
+
+        assert_eq!(restored.vocab_size(), encoder.vocab_size());
+        assert_eq!(restored.doc_count, encoder.doc_count);
+
+        // Verify encoding produces identical dot-product scores
+        // (index order may differ due to HashMap iteration order, but scores must match)
+        let mut encoder2 = encoder;
+        let mut restored2 = restored;
+        let orig_vec = encoder2.encode("quick brown").unwrap();
+        let restored_vec = restored2.encode("quick brown").unwrap();
+
+        // Sort by index for comparison
+        let mut orig_pairs: Vec<_> = orig_vec.indices.iter().zip(orig_vec.values.iter()).collect();
+        let mut restored_pairs: Vec<_> = restored_vec.indices.iter().zip(restored_vec.values.iter()).collect();
+        orig_pairs.sort_by_key(|(&idx, _)| idx);
+        restored_pairs.sort_by_key(|(&idx, _)| idx);
+        assert_eq!(orig_pairs, restored_pairs);
     }
 }

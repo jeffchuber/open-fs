@@ -22,6 +22,26 @@ impl RecursiveChunker {
         self
     }
 
+    fn floor_char_boundary(text: &str, mut idx: usize) -> usize {
+        if idx >= text.len() {
+            return text.len();
+        }
+        while idx > 0 && !text.is_char_boundary(idx) {
+            idx -= 1;
+        }
+        idx
+    }
+
+    fn ceil_char_boundary(text: &str, mut idx: usize) -> usize {
+        if idx >= text.len() {
+            return text.len();
+        }
+        while idx < text.len() && !text.is_char_boundary(idx) {
+            idx += 1;
+        }
+        idx
+    }
+
     fn split_text(&self, text: &str, separators: &[&str]) -> Vec<String> {
         if text.is_empty() {
             return vec![];
@@ -72,6 +92,7 @@ impl RecursiveChunker {
                 if self.config.chunk_overlap > 0 && !chunks.is_empty() {
                     let last_chunk = chunks.last().unwrap();
                     let overlap_start = last_chunk.len().saturating_sub(self.config.chunk_overlap);
+                    let overlap_start = Self::floor_char_boundary(last_chunk, overlap_start);
                     current_chunk = last_chunk[overlap_start..].to_string();
                     current_chunk.push_str(&piece);
                 } else {
@@ -112,10 +133,11 @@ impl Chunker for RecursiveChunker {
             }
 
             // Find the actual offset in the original text
-            let start_offset = if let Some(pos) = text[current_offset..].find(&content) {
-                current_offset + pos
+            let search_start = Self::ceil_char_boundary(text, current_offset);
+            let start_offset = if let Some(pos) = text[search_start..].find(&content) {
+                search_start + pos
             } else {
-                current_offset
+                search_start
             };
             let end_offset = start_offset + content.len();
 
@@ -133,7 +155,7 @@ impl Chunker for RecursiveChunker {
                 total_chunks,
             ));
 
-            current_offset = start_offset + 1;
+            current_offset = Self::ceil_char_boundary(text, start_offset.saturating_add(1));
         }
 
         // Update total_chunks to actual count
@@ -165,7 +187,7 @@ mod tests {
         let chunker = RecursiveChunker::new(config);
 
         let text = "First paragraph with some content.\n\nSecond paragraph with more content.\n\nThird paragraph here.";
-        let chunks = chunker.chunk(&text, "/test.txt").await.unwrap();
+        let chunks = chunker.chunk(text, "/test.txt").await.unwrap();
 
         assert!(!chunks.is_empty());
         // Should split on paragraph boundaries
@@ -181,7 +203,7 @@ mod tests {
         let chunker = RecursiveChunker::new(config);
 
         let text = "This is a long sentence that should be split. And another one here. Plus more text to fill it out.";
-        let chunks = chunker.chunk(&text, "/test.txt").await.unwrap();
+        let chunks = chunker.chunk(text, "/test.txt").await.unwrap();
 
         assert!(chunks.len() > 1);
         // Each chunk should be roughly the target size
@@ -209,7 +231,7 @@ mod tests {
         let chunker = RecursiveChunker::new(config);
 
         let text = "Small text.";
-        let chunks = chunker.chunk(&text, "/test.txt").await.unwrap();
+        let chunks = chunker.chunk(text, "/test.txt").await.unwrap();
 
         assert_eq!(chunks.len(), 1);
         assert_eq!(chunks[0].content, text);
@@ -225,7 +247,7 @@ mod tests {
         let chunker = RecursiveChunker::new(config);
 
         let text = "Line one.\nLine two.\nLine three.\nLine four.\nLine five.";
-        let chunks = chunker.chunk(&text, "/test.txt").await.unwrap();
+        let chunks = chunker.chunk(text, "/test.txt").await.unwrap();
 
         // Should prefer splitting on newlines
         assert!(!chunks.is_empty());
@@ -241,7 +263,7 @@ mod tests {
         let chunker = RecursiveChunker::new(config);
 
         let text = "First sentence. Second sentence. Third sentence.";
-        let chunks = chunker.chunk(&text, "/test.txt").await.unwrap();
+        let chunks = chunker.chunk(text, "/test.txt").await.unwrap();
 
         // Should prefer splitting on sentence boundaries
         assert!(chunks.len() > 1);
@@ -257,7 +279,7 @@ mod tests {
         let chunker = RecursiveChunker::new(config);
 
         let text = "one two three four five";
-        let chunks = chunker.chunk(&text, "/test.txt").await.unwrap();
+        let chunks = chunker.chunk(text, "/test.txt").await.unwrap();
 
         // Should split on word boundaries
         assert!(chunks.len() > 1);
@@ -273,7 +295,7 @@ mod tests {
         let chunker = RecursiveChunker::new(config);
 
         let text = "abcdefghij";
-        let chunks = chunker.chunk(&text, "/test.txt").await.unwrap();
+        let chunks = chunker.chunk(text, "/test.txt").await.unwrap();
 
         // Should eventually split on characters
         assert!(chunks.len() > 1);
@@ -290,7 +312,7 @@ mod tests {
             .with_separators(vec!["|", ""]);
 
         let text = "part1|part2|part3|part4";
-        let chunks = chunker.chunk(&text, "/test.txt").await.unwrap();
+        let chunks = chunker.chunk(text, "/test.txt").await.unwrap();
 
         // Should split on custom separator
         assert!(chunks.len() > 1);
@@ -322,7 +344,7 @@ mod tests {
         let chunker = RecursiveChunker::new(config);
 
         let text = "First part.\n\nSecond part.\n\nThird part.";
-        let chunks = chunker.chunk(&text, "/path/to/file.txt").await.unwrap();
+        let chunks = chunker.chunk(text, "/path/to/file.txt").await.unwrap();
 
         for chunk in &chunks {
             assert_eq!(chunk.source_path, "/path/to/file.txt");
@@ -340,9 +362,24 @@ mod tests {
         let chunker = RecursiveChunker::new(config);
 
         let text = "\u{4e16}\u{754c} \u{4f60}\u{597d} hello \u{1F600} world";
-        let chunks = chunker.chunk(&text, "/test.txt").await.unwrap();
+        let chunks = chunker.chunk(text, "/test.txt").await.unwrap();
 
         // Should handle unicode without panicking
+        assert!(!chunks.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_recursive_chunker_unicode_overlap() {
+        let config = ChunkerConfig {
+            chunk_size: 10,
+            chunk_overlap: 3,
+            min_chunk_size: 1,
+        };
+        let chunker = RecursiveChunker::new(config);
+
+        let text = "😀😃😄😁😆😅";
+        let chunks = chunker.chunk(text, "/test.txt").await.unwrap();
+
         assert!(!chunks.is_empty());
     }
 
@@ -357,7 +394,7 @@ mod tests {
 
         // Test with repeated characters (regression test for the fixed bug)
         let text = "aaabbbccc";
-        let chunks = chunker.chunk(&text, "/test.txt").await.unwrap();
+        let chunks = chunker.chunk(text, "/test.txt").await.unwrap();
 
         // Should correctly handle repeated characters
         assert!(!chunks.is_empty());

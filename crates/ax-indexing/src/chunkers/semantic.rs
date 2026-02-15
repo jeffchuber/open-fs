@@ -183,7 +183,7 @@ This is the second paragraph.
 
 More content here in section two.
 "#;
-        let chunks = chunker.chunk(&text, "/test.md").await.unwrap();
+        let chunks = chunker.chunk(text, "/test.md").await.unwrap();
 
         assert!(!chunks.is_empty());
         // Should preserve logical structure
@@ -210,7 +210,7 @@ def world():
 
 Some text after.
 "#;
-        let chunks = chunker.chunk(&text, "/test.md").await.unwrap();
+        let chunks = chunker.chunk(text, "/test.md").await.unwrap();
 
         // Code block should not be split
         let code_chunk = chunks.iter().find(|c| c.content.contains("```python"));
@@ -237,7 +237,7 @@ Some text after.
         let chunker = SemanticChunker::new(config);
 
         let text = "This is a single paragraph of text.";
-        let chunks = chunker.chunk(&text, "/test.md").await.unwrap();
+        let chunks = chunker.chunk(text, "/test.md").await.unwrap();
 
         assert_eq!(chunks.len(), 1);
     }
@@ -263,7 +263,7 @@ Content under header 2.
 
 Content under header 3.
 "#;
-        let chunks = chunker.chunk(&text, "/test.md").await.unwrap();
+        let chunks = chunker.chunk(text, "/test.md").await.unwrap();
 
         // Headers should be recognized as boundaries
         assert!(!chunks.is_empty());
@@ -288,7 +288,7 @@ Header Two
 
 Content under header two.
 "#;
-        let chunks = chunker.chunk(&text, "/test.md").await.unwrap();
+        let chunks = chunker.chunk(text, "/test.md").await.unwrap();
 
         assert!(!chunks.is_empty());
     }
@@ -312,7 +312,7 @@ Section two content.
 
 Section three content.
 "#;
-        let chunks = chunker.chunk(&text, "/test.md").await.unwrap();
+        let chunks = chunker.chunk(text, "/test.md").await.unwrap();
 
         // Horizontal rules should be recognized as boundaries
         assert!(!chunks.is_empty());
@@ -339,7 +339,7 @@ Second code block:
 println!("World");
 ```
 "#;
-        let chunks = chunker.chunk(&text, "/test.md").await.unwrap();
+        let chunks = chunker.chunk(text, "/test.md").await.unwrap();
 
         // Each code block should remain intact
         assert!(!chunks.is_empty());
@@ -361,7 +361,7 @@ println!("World");
 This is paragraph inside code.
 ```
 "#;
-        let chunks = chunker.chunk(&text, "/test.md").await.unwrap();
+        let chunks = chunker.chunk(text, "/test.md").await.unwrap();
 
         // Content inside code block should not be split
         assert_eq!(chunks.len(), 1);
@@ -384,7 +384,7 @@ METHODS
 
 This is the methods section.
 "#;
-        let chunks = chunker.chunk(&text, "/test.txt").await.unwrap();
+        let chunks = chunker.chunk(text, "/test.txt").await.unwrap();
 
         // All caps lines should be recognized as headers
         assert!(!chunks.is_empty());
@@ -405,7 +405,7 @@ Also short.
 
 Very short too.
 "#;
-        let chunks = chunker.chunk(&text, "/test.md").await.unwrap();
+        let chunks = chunker.chunk(text, "/test.md").await.unwrap();
 
         // Small sections should be merged together
         // (exact behavior depends on implementation)
@@ -442,7 +442,7 @@ Very short too.
         let chunker = SemanticChunker::new(config);
 
         let text = "# Header\n\nContent here.";
-        let chunks = chunker.chunk(&text, "/path/to/doc.md").await.unwrap();
+        let chunks = chunker.chunk(text, "/path/to/doc.md").await.unwrap();
 
         for chunk in &chunks {
             assert_eq!(chunk.source_path, "/path/to/doc.md");

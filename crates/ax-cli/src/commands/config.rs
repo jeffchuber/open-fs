@@ -1,4 +1,4 @@
-use ax_core::Vfs;
+use ax_remote::Vfs;
 
 pub async fn run(vfs: &Vfs) -> Result<(), Box<dyn std::error::Error>> {
     let config = vfs.effective_config();

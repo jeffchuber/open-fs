@@ -9,6 +9,12 @@ class Entry:
     is_dir: bool
     size: Optional[int]
 
+class GrepMatch:
+    """A single grep match."""
+    path: str
+    line_number: int
+    line: str
+
 class Vfs:
     """AX Virtual Filesystem."""
 
@@ -81,6 +87,34 @@ class Vfs:
         """Get mount paths."""
         ...
 
+    def rename(self, from_path: str, to_path: str) -> None:
+        """Rename/move a file.
+
+        Args:
+            from_path: Source path
+            to_path: Destination path
+        """
+        ...
+
+    def copy(self, src: str, dst: str) -> int:
+        """Copy a file. Returns the number of bytes copied.
+
+        Args:
+            src: Source path
+            dst: Destination path
+        """
+        ...
+
+    def grep(self, pattern: str, path: Optional[str] = None, recursive: Optional[bool] = None) -> List[GrepMatch]:
+        """Search files for lines matching a regex pattern.
+
+        Args:
+            pattern: Regular expression pattern
+            path: Path to search (default: "/")
+            recursive: Whether to search recursively (default: False)
+        """
+        ...
+
 def load_config(yaml: str) -> Vfs:
     """Parse a YAML configuration string and return a VFS."""
     ...
@@ -92,3 +126,4 @@ def load_config_file(path: str) -> Vfs:
 # Re-export for convenience
 PyVfs = Vfs
 PyEntry = Entry
+PyGrepMatch = GrepMatch

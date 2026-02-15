@@ -5,6 +5,7 @@ use chrono::{DateTime, Utc};
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
 use tracing::{debug, instrument};
+use std::path::Component;
 
 use crate::error::BackendError;
 use crate::traits::{Backend, Entry};
@@ -38,28 +39,34 @@ impl FsBackend {
 
     /// Resolve a relative path to an absolute path, preventing directory traversal.
     fn resolve_path(&self, path: &str) -> Result<PathBuf, BackendError> {
-        let path = path.trim_start_matches('/');
-        let full_path = self.root.join(path);
+        let trimmed = path.trim_start_matches('/');
+        let rel = Path::new(trimmed);
 
-        // Canonicalize the parent directory and check it's under root
-        // For new files, we check the parent directory
-        let check_path = if full_path.exists() {
-            full_path.canonicalize().map_err(BackendError::Io)?
-        } else {
-            // For non-existent paths, check the parent
-            if let Some(parent) = full_path.parent() {
-                if parent.exists() {
-                    let canonical_parent = parent.canonicalize().map_err(BackendError::Io)?;
-                    if !canonical_parent.starts_with(&self.root) {
-                        return Err(BackendError::PathTraversal(path.to_string()));
-                    }
+        // Reject attempts to traverse outside the root.
+        for component in rel.components() {
+            match component {
+                Component::ParentDir | Component::RootDir | Component::Prefix(_) => {
+                    return Err(BackendError::PathTraversal(trimmed.to_string()));
                 }
+                _ => {}
             }
-            full_path.clone()
-        };
+        }
 
-        if check_path != full_path && !check_path.starts_with(&self.root) {
-            return Err(BackendError::PathTraversal(path.to_string()));
+        let full_path = self.root.join(rel);
+
+        // Find the nearest existing ancestor and ensure it resolves under root.
+        let mut ancestor = full_path.as_path();
+        while !ancestor.exists() {
+            if let Some(parent) = ancestor.parent() {
+                ancestor = parent;
+            } else {
+                break;
+            }
+        }
+
+        let canonical_ancestor = ancestor.canonicalize().map_err(BackendError::Io)?;
+        if !canonical_ancestor.starts_with(&self.root) {
+            return Err(BackendError::PathTraversal(trimmed.to_string()));
         }
 
         Ok(full_path)
@@ -225,12 +232,36 @@ impl Backend for FsBackend {
             ))
         }
     }
+
+    #[instrument(skip(self), fields(backend = "fs", from = %from, to = %to))]
+    async fn rename(&self, from: &str, to: &str) -> Result<(), BackendError> {
+        let from_path = self.resolve_path(from)?;
+        let to_path = self.resolve_path(to)?;
+        debug!(from = ?from_path, to = ?to_path, "renaming file");
+
+        // Create parent directories for destination if needed
+        if let Some(parent) = to_path.parent() {
+            fs::create_dir_all(parent).await.map_err(BackendError::Io)?;
+        }
+
+        fs::rename(&from_path, &to_path).await.map_err(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                BackendError::NotFound(from.to_string())
+            } else {
+                BackendError::Io(e)
+            }
+        })
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use tempfile::TempDir;
+    use crate::error::BackendError;
+
+    #[cfg(unix)]
+    use std::os::unix::fs as unix_fs;
 
     #[tokio::test]
     async fn test_write_and_read() {
@@ -295,5 +326,28 @@ mod tests {
         assert_eq!(entry.name, "test.txt");
         assert!(!entry.is_dir);
         assert_eq!(entry.size, Some(11));
+    }
+
+    #[tokio::test]
+    async fn test_path_traversal_rejected() {
+        let temp_dir = TempDir::new().unwrap();
+        let backend = FsBackend::new(temp_dir.path()).unwrap();
+
+        let err = backend.write("../escape.txt", b"nope").await.unwrap_err();
+        assert!(matches!(err, BackendError::PathTraversal(_)));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_symlink_escape_rejected() {
+        let temp_dir = TempDir::new().unwrap();
+        let backend = FsBackend::new(temp_dir.path()).unwrap();
+
+        let outside_dir = TempDir::new().unwrap();
+        let link_path = temp_dir.path().join("escape");
+        unix_fs::symlink(outside_dir.path(), &link_path).unwrap();
+
+        let err = backend.write("escape/evil.txt", b"nope").await.unwrap_err();
+        assert!(matches!(err, BackendError::PathTraversal(_)));
     }
 }

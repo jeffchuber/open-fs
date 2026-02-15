@@ -2,16 +2,28 @@
 name = "ax-cli"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Command-line interface for the AX virtual filesystem"
 
 [[bin]]
 name = "ax"
 path = "src/main.rs"
+test = false
+bench = false
+
+[features]
+default = []
+fuse = ["ax-fuse"]
 
 [dependencies]
 ax-config = { path = "../ax-config" }
 ax-core = { path = "../ax-core" }
-ax-backends = { path = "../ax-backends" }
-ax-indexing = { path = "../ax-indexing" }
+ax-local = { path = "../ax-local" }
+ax-remote = { path = "../ax-remote" }
+ax-fuse = { path = "../ax-fuse", optional = true }
+ax-mcp = { path = "../ax-mcp" }
+ax-server = { path = "../ax-server" }
 clap = { version = "4", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
 dirs-next = "2"
@@ -20,6 +32,7 @@ serde_yaml = "0.9"
 regex = "1"
 serde_json = "1"
 chrono = "0.4"
+reqwest = { version = "0.12", features = ["json"] }
 
 [dev-dependencies]
 tempfile = "3"

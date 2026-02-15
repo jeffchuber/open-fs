@@ -1,4 +1,4 @@
-use ax_core::Vfs;
+use ax_remote::Vfs;
 
 pub async fn run(vfs: &Vfs) -> Result<(), Box<dyn std::error::Error>> {
     let config = vfs.effective_config();
@@ -19,10 +19,16 @@ pub async fn run(vfs: &Vfs) -> Result<(), Box<dyn std::error::Error>> {
     for (name, backend) in &config.backends {
         let backend_type = match backend {
             ax_config::BackendConfig::Fs(_) => "fs",
+            ax_config::BackendConfig::Memory(_) => "memory",
             ax_config::BackendConfig::Chroma(_) => "chroma",
             ax_config::BackendConfig::S3(_) => "s3",
             ax_config::BackendConfig::Postgres(_) => "postgres",
             ax_config::BackendConfig::Api(_) => "api",
+            ax_config::BackendConfig::WebDav(_) => "webdav",
+            ax_config::BackendConfig::Sftp(_) => "sftp",
+            ax_config::BackendConfig::Gcs(_) => "gcs",
+            ax_config::BackendConfig::AzureBlob(_) => "azure_blob",
+            _ => "unknown",
         };
         println!("  {} ({})", name, backend_type);
     }
@@ -39,6 +45,7 @@ pub async fn run(vfs: &Vfs) -> Result<(), Box<dyn std::error::Error>> {
             ax_config::MountMode::Remote => "remote",
             ax_config::MountMode::RemoteCached => "remote-cached",
             ax_config::MountMode::PullMirror => "pull-mirror",
+            _ => "unknown",
         });
 
         let read_only = if mount.read_only {

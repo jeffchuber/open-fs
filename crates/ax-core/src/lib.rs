@@ -1,23 +1,13 @@
 mod cache;
-mod cached_backend;
+mod chroma;
 mod error;
 mod metrics;
-mod pipeline;
-mod router;
-mod search;
-mod sync;
 mod tools;
 mod traits;
-mod vfs;
 
 pub use cache::{CacheConfig, CacheStats, LruCache, SharedCache, create_cache};
-pub use cached_backend::{CachedBackend, CachedBackendStatus};
-pub use error::VfsError;
+pub use chroma::{ChromaStore, QueryResult, SparseEmbedding};
+pub use error::{BackendError, VfsError};
 pub use metrics::{MetricsSnapshot, SharedMetrics, VfsMetrics, create_metrics};
-pub use pipeline::{IndexingPipeline, PipelineConfig};
-pub use router::{Mount, Router};
-pub use search::{SearchConfig, SearchEngine, SearchMode};
-pub use sync::{SyncConfig, SyncEngine, SyncMode, SyncStats};
 pub use tools::{ToolDefinition, ToolFormat, ToolParameter, generate_tools, format_tools};
 pub use traits::{Backend, Entry};
-pub use vfs::Vfs;

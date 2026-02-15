@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
-use crate::error::VfsError;
-use crate::traits::Backend;
+use ax_core::{Backend, VfsError};
 
 /// Mount information for routing.
 pub struct Mount {
@@ -91,33 +90,36 @@ fn strip_mount_prefix(path: &str, mount_path: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::traits::Entry;
     use async_trait::async_trait;
+    use ax_core::{BackendError, Entry};
 
     struct MockBackend;
 
     #[async_trait]
     impl Backend for MockBackend {
-        async fn read(&self, _path: &str) -> Result<Vec<u8>, VfsError> {
+        async fn read(&self, _path: &str) -> Result<Vec<u8>, BackendError> {
             Ok(vec![])
         }
-        async fn write(&self, _path: &str, _content: &[u8]) -> Result<(), VfsError> {
+        async fn write(&self, _path: &str, _content: &[u8]) -> Result<(), BackendError> {
             Ok(())
         }
-        async fn append(&self, _path: &str, _content: &[u8]) -> Result<(), VfsError> {
+        async fn append(&self, _path: &str, _content: &[u8]) -> Result<(), BackendError> {
             Ok(())
         }
-        async fn delete(&self, _path: &str) -> Result<(), VfsError> {
+        async fn delete(&self, _path: &str) -> Result<(), BackendError> {
             Ok(())
         }
-        async fn list(&self, _path: &str) -> Result<Vec<Entry>, VfsError> {
+        async fn list(&self, _path: &str) -> Result<Vec<Entry>, BackendError> {
             Ok(vec![])
         }
-        async fn exists(&self, _path: &str) -> Result<bool, VfsError> {
+        async fn exists(&self, _path: &str) -> Result<bool, BackendError> {
             Ok(true)
         }
-        async fn stat(&self, _path: &str) -> Result<Entry, VfsError> {
+        async fn stat(&self, _path: &str) -> Result<Entry, BackendError> {
             Ok(Entry::file(String::new(), String::new(), 0, None))
+        }
+        async fn rename(&self, _from: &str, _to: &str) -> Result<(), BackendError> {
+            Ok(())
         }
     }
 

@@ -1,0 +1,36 @@
+[package]
+name = "ax-fuse"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "FUSE filesystem implementation for AX VFS"
+
+[lib]
+test = false
+doctest = false
+bench = false
+
+[dependencies]
+ax-config = { path = "../ax-config" }
+ax-core = { path = "../ax-core" }
+ax-remote = { path = "../ax-remote" }
+tokio = { version = "1", features = ["full"] }
+thiserror = "2"
+tracing = "0.1"
+urlencoding = "2"
+chrono = { version = "0.4", features = ["serde"] }
+parking_lot = "0.12"
+
+# Unix-only dependencies (macOS, Linux)
+[target.'cfg(unix)'.dependencies]
+fuser = "0.14"
+libc = "0.2"
+
+# Windows-only dependencies
+[target.'cfg(windows)'.dependencies]
+winfsp = "0.5"
+windows = { version = "0.58", features = ["Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem"] }
+
+[dev-dependencies]
+tempfile = "3"

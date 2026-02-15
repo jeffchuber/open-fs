@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::time::Duration;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -29,6 +30,13 @@ struct CreateCollectionRequest {
 struct CollectionResponse {
     id: String,
     name: String,
+}
+
+/// Sparse vector representation for BM25/keyword search.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SparseEmbedding {
+    pub indices: Vec<u32>,
+    pub values: Vec<f32>,
 }
 
 #[derive(Serialize)]
@@ -85,7 +93,11 @@ struct GetDocumentsResponse {
 impl ChromaBackend {
     /// Create a new Chroma backend.
     pub async fn new(endpoint: &str, collection_name: &str) -> Result<Self, BackendError> {
-        let client = Client::new();
+        let client = Client::builder()
+            .timeout(Duration::from_secs(30))
+            .connect_timeout(Duration::from_secs(5))
+            .build()
+            .map_err(|e| BackendError::Other(format!("Failed to build HTTP client: {}", e)))?;
         let endpoint = endpoint.trim_end_matches('/').to_string();
 
         // Create or get collection
@@ -130,12 +142,13 @@ impl ChromaBackend {
         path.replace('/', "_").trim_start_matches('_').to_string()
     }
 
-    /// Store a document with optional embedding.
+    /// Store a document with optional dense and sparse embeddings.
     pub async fn upsert(
         &self,
         path: &str,
         content: &str,
         embedding: Option<Vec<f32>>,
+        sparse_embedding: Option<SparseEmbedding>,
         metadata: Option<HashMap<String, serde_json::Value>>,
     ) -> Result<(), BackendError> {
         let id = Self::path_to_id(path);
@@ -146,6 +159,18 @@ impl ChromaBackend {
             "updated_at".to_string(),
             serde_json::json!(Utc::now().to_rfc3339()),
         );
+
+        // Store sparse embedding in metadata as JSON (Chroma doesn't natively support sparse vectors)
+        if let Some(ref sparse) = sparse_embedding {
+            meta.insert(
+                "_sparse_indices".to_string(),
+                serde_json::json!(sparse.indices),
+            );
+            meta.insert(
+                "_sparse_values".to_string(),
+                serde_json::json!(sparse.values),
+            );
+        }
 
         let request = AddDocumentsRequest {
             ids: vec![id],
@@ -251,6 +276,273 @@ impl ChromaBackend {
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
+
+    /// Query by sparse embedding — fetches all documents with sparse vectors and scores them client-side.
+    ///
+    /// Chroma doesn't natively support sparse vector search, so we retrieve documents
+    /// that have sparse metadata and compute dot-product scores locally.
+    pub async fn query_by_sparse_embedding(
+        &self,
+        query_sparse: &SparseEmbedding,
+        n_results: usize,
+    ) -> Result<Vec<QueryResult>, BackendError> {
+        // Fetch all documents with sparse metadata
+        let request = GetDocumentsRequest {
+            ids: None,
+            r#where: Some(serde_json::json!({"_sparse_indices": {"$ne": ""}})),
+            include: Some(vec![
+                "documents".to_string(),
+                "metadatas".to_string(),
+            ]),
+        };
+
+        let response = self
+            .client
+            .post(format!(
+                "{}/api/v1/collections/{}/get",
+                self.endpoint, self.collection_id
+            ))
+            .json(&request)
+            .send()
+            .await
+            .map_err(|e| BackendError::Other(format!("Chroma request failed: {}", e)))?;
+
+        if !response.status().is_success() {
+            // If the filter doesn't work (some Chroma versions), fall back to getting all docs
+            return self.query_sparse_fallback(query_sparse, n_results).await;
+        }
+
+        let result: GetDocumentsResponse = response
+            .json()
+            .await
+            .map_err(|e| BackendError::Other(format!("Failed to parse response: {}", e)))?;
+
+        self.score_sparse_results(&result, query_sparse, n_results)
+    }
+
+    /// Fallback: get all documents and filter for ones with sparse vectors.
+    async fn query_sparse_fallback(
+        &self,
+        query_sparse: &SparseEmbedding,
+        n_results: usize,
+    ) -> Result<Vec<QueryResult>, BackendError> {
+        let request = GetDocumentsRequest {
+            ids: None,
+            r#where: None,
+            include: Some(vec![
+                "documents".to_string(),
+                "metadatas".to_string(),
+            ]),
+        };
+
+        let response = self
+            .client
+            .post(format!(
+                "{}/api/v1/collections/{}/get",
+                self.endpoint, self.collection_id
+            ))
+            .json(&request)
+            .send()
+            .await
+            .map_err(|e| BackendError::Other(format!("Chroma request failed: {}", e)))?;
+
+        if !response.status().is_success() {
+            return Ok(vec![]);
+        }
+
+        let result: GetDocumentsResponse = response
+            .json()
+            .await
+            .map_err(|e| BackendError::Other(format!("Failed to parse response: {}", e)))?;
+
+        self.score_sparse_results(&result, query_sparse, n_results)
+    }
+
+    /// Score documents by sparse dot product, returning top N.
+    fn score_sparse_results(
+        &self,
+        result: &GetDocumentsResponse,
+        query_sparse: &SparseEmbedding,
+        n_results: usize,
+    ) -> Result<Vec<QueryResult>, BackendError> {
+        let mut scored: Vec<QueryResult> = Vec::new();
+
+        for (i, id) in result.ids.iter().enumerate() {
+            let metadata = result
+                .metadatas
+                .as_ref()
+                .and_then(|m| m.get(i))
+                .and_then(|m| m.clone());
+
+            // Extract sparse vector from metadata
+            let sparse = metadata.as_ref().and_then(|m| {
+                let indices = m.get("_sparse_indices")?.as_array()?;
+                let values = m.get("_sparse_values")?.as_array()?;
+                let indices: Vec<u32> = indices.iter().filter_map(|v| v.as_u64().map(|n| n as u32)).collect();
+                let values: Vec<f32> = values.iter().filter_map(|v| v.as_f64().map(|n| n as f32)).collect();
+                if indices.is_empty() { return None; }
+                Some(SparseEmbedding { indices, values })
+            });
+
+            if let Some(doc_sparse) = sparse {
+                let score = sparse_dot_product(query_sparse, &doc_sparse);
+                if score > 0.0 {
+                    let doc = result
+                        .documents
+                        .as_ref()
+                        .and_then(|d| d.get(i))
+                        .and_then(|d| d.clone());
+
+                    scored.push(QueryResult {
+                        id: id.clone(),
+                        document: doc,
+                        distance: 1.0 - score, // Convert to distance
+                        score,
+                        metadata,
+                    });
+                }
+            }
+        }
+
+        // Sort by score descending
+        scored.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        scored.truncate(n_results);
+        Ok(scored)
+    }
+
+    /// Delete all documents matching a metadata filter (e.g., all chunks for a source_path).
+    pub async fn delete_by_metadata(
+        &self,
+        filter: serde_json::Value,
+    ) -> Result<usize, BackendError> {
+        // First, find matching IDs
+        let request = GetDocumentsRequest {
+            ids: None,
+            r#where: Some(filter.clone()),
+            include: None,
+        };
+
+        let response = self
+            .client
+            .post(format!(
+                "{}/api/v1/collections/{}/get",
+                self.endpoint, self.collection_id
+            ))
+            .json(&request)
+            .send()
+            .await
+            .map_err(|e| BackendError::Other(format!("Chroma request failed: {}", e)))?;
+
+        if !response.status().is_success() {
+            return Ok(0);
+        }
+
+        let result: GetDocumentsResponse = response
+            .json()
+            .await
+            .map_err(|e| BackendError::Other(format!("Failed to parse response: {}", e)))?;
+
+        if result.ids.is_empty() {
+            return Ok(0);
+        }
+
+        let count = result.ids.len();
+
+        // Delete by IDs
+        let response = self
+            .client
+            .post(format!(
+                "{}/api/v1/collections/{}/delete",
+                self.endpoint, self.collection_id
+            ))
+            .json(&serde_json::json!({ "ids": result.ids }))
+            .send()
+            .await
+            .map_err(|e| BackendError::Other(format!("Chroma delete failed: {}", e)))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(BackendError::Other(format!(
+                "Failed to delete by metadata: {} - {}",
+                status, body
+            )));
+        }
+
+        Ok(count)
+    }
+
+    /// Set collection metadata (used for persisting SparseEncoder state).
+    pub async fn set_collection_metadata(
+        &self,
+        metadata: HashMap<String, serde_json::Value>,
+    ) -> Result<(), BackendError> {
+        let response = self
+            .client
+            .put(format!(
+                "{}/api/v1/collections/{}",
+                self.endpoint, self.collection_id
+            ))
+            .json(&serde_json::json!({ "metadata": metadata }))
+            .send()
+            .await
+            .map_err(|e| BackendError::Other(format!("Chroma request failed: {}", e)))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(BackendError::Other(format!(
+                "Failed to set collection metadata: {} - {}",
+                status, body
+            )));
+        }
+
+        Ok(())
+    }
+
+    /// Get collection metadata (used for loading SparseEncoder state).
+    pub async fn get_collection_metadata(
+        &self,
+    ) -> Result<Option<HashMap<String, serde_json::Value>>, BackendError> {
+        let response = self
+            .client
+            .get(format!(
+                "{}/api/v1/collections/{}",
+                self.endpoint, self.collection_id
+            ))
+            .send()
+            .await
+            .map_err(|e| BackendError::Other(format!("Chroma request failed: {}", e)))?;
+
+        if !response.status().is_success() {
+            return Ok(None);
+        }
+
+        #[derive(Deserialize)]
+        struct CollectionDetail {
+            #[serde(default)]
+            metadata: Option<HashMap<String, serde_json::Value>>,
+        }
+
+        let detail: CollectionDetail = response
+            .json()
+            .await
+            .map_err(|e| BackendError::Other(format!("Failed to parse response: {}", e)))?;
+
+        Ok(detail.metadata)
+    }
+}
+
+/// Compute sparse dot product between two sparse vectors.
+fn sparse_dot_product(a: &SparseEmbedding, b: &SparseEmbedding) -> f32 {
+    let b_map: HashMap<u32, f32> = b.indices.iter().copied().zip(b.values.iter().copied()).collect();
+    let mut score = 0.0f32;
+    for (idx, val) in a.indices.iter().zip(a.values.iter()) {
+        if let Some(&b_val) = b_map.get(idx) {
+            score += val * b_val;
+        }
+    }
+    score
 }
 
 /// Result from a Chroma query.
@@ -309,7 +601,7 @@ impl Backend for ChromaBackend {
 
     async fn write(&self, path: &str, content: &[u8]) -> Result<(), BackendError> {
         let text = String::from_utf8_lossy(content).to_string();
-        self.upsert(path, &text, None, None).await
+        self.upsert(path, &text, None, None, None).await
     }
 
     async fn append(&self, path: &str, content: &[u8]) -> Result<(), BackendError> {
@@ -320,7 +612,7 @@ impl Backend for ChromaBackend {
         };
 
         let new_content = format!("{}{}", existing, String::from_utf8_lossy(content));
-        self.upsert(path, &new_content, None, None).await
+        self.upsert(path, &new_content, None, None, None).await
     }
 
     async fn delete(&self, path: &str) -> Result<(), BackendError> {
@@ -536,5 +828,33 @@ mod tests {
 
         backend.delete("/test.txt").await.unwrap();
         assert!(!backend.exists("/test.txt").await.unwrap());
+    }
+
+    #[test]
+    fn test_sparse_dot_product() {
+        let a = SparseEmbedding {
+            indices: vec![0, 1, 2],
+            values: vec![1.0, 2.0, 3.0],
+        };
+        let b = SparseEmbedding {
+            indices: vec![1, 2, 3],
+            values: vec![1.0, 1.0, 1.0],
+        };
+        let score = sparse_dot_product(&a, &b);
+        assert!((score - 5.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_sparse_dot_product_no_overlap() {
+        let a = SparseEmbedding {
+            indices: vec![0, 1],
+            values: vec![1.0, 2.0],
+        };
+        let b = SparseEmbedding {
+            indices: vec![10, 11],
+            values: vec![1.0, 1.0],
+        };
+        let score = sparse_dot_product(&a, &b);
+        assert_eq!(score, 0.0);
     }
 }

@@ -1,4 +1,4 @@
-use ax_core::Vfs;
+use ax_remote::Vfs;
 use regex::Regex;
 
 pub async fn run(
@@ -25,7 +25,10 @@ async fn find_recursive(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let entries = match vfs.list(path).await {
         Ok(e) => e,
-        Err(_) => return Ok(()),
+        Err(e) => {
+            eprintln!("warning: cannot list '{}': {}", path, e);
+            return Ok(());
+        }
     };
 
     for entry in entries {

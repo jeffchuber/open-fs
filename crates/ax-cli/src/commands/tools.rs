@@ -1,4 +1,5 @@
-use ax_core::{generate_tools, format_tools, ToolFormat, Vfs};
+use ax_core::{generate_tools, format_tools, ToolFormat};
+use ax_remote::Vfs;
 
 pub async fn run(
     vfs: &Vfs,

@@ -1,5 +1,6 @@
 mod defaults;
 mod env;
+pub mod migration;
 pub mod types;
 mod validation;
 

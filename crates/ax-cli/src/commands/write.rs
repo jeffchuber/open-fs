@@ -1,4 +1,4 @@
-use ax_core::Vfs;
+use ax_remote::Vfs;
 use std::io::{self, Read};
 
 pub async fn run(

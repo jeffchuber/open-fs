@@ -2,9 +2,13 @@
 name = "ax-indexing"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Text chunking, embedding, and search indexing pipeline for AX"
 
 [dependencies]
 ax-config = { path = "../ax-config" }
+blake3 = "1"
 tokio = { version = "1", features = ["full"] }
 async-trait = "0.1"
 thiserror = "2"

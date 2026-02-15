@@ -2,16 +2,14 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-use ax_backends::{ChromaBackend, Backend};
-use ax_indexing::{
+use ax_core::{Backend, ChromaStore, SparseEmbedding, VfsError};
+use crate::{
     ChunkerConfig, EmbedderConfig, EmbeddedChunk,
     PipelineResult, BulkIndexResult, SparseEncoder, SparseVector,
     chunkers, embedders, extractors, TextExtractor, Chunker, Embedder,
 };
 use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
-
-use crate::error::VfsError;
 
 /// Configuration for the indexing pipeline.
 #[derive(Debug, Clone)]
@@ -50,7 +48,7 @@ pub struct IndexingPipeline {
     embedder: Box<dyn Embedder>,
     extractor: extractors::PlainTextExtractor,
     sparse_encoder: Arc<RwLock<SparseEncoder>>,
-    chroma: Option<ChromaBackend>,
+    chroma: Option<Arc<dyn ChromaStore>>,
 }
 
 impl IndexingPipeline {
@@ -74,7 +72,7 @@ impl IndexingPipeline {
     }
 
     /// Connect a Chroma backend for vector storage.
-    pub fn with_chroma(mut self, chroma: ChromaBackend) -> Self {
+    pub fn with_chroma(mut self, chroma: Arc<dyn ChromaStore>) -> Self {
         self.chroma = Some(chroma);
         self
     }
@@ -113,16 +111,26 @@ impl IndexingPipeline {
         }
 
         // Update sparse encoder and compute sparse vectors if enabled
+        let mut sparse_vectors: Vec<Option<SparseVector>> = Vec::new();
         if self.config.enable_sparse {
             let mut encoder = self.sparse_encoder.write().await;
             for chunk in &chunks {
                 encoder.update_idf(&chunk.content);
             }
+            for chunk in &chunks {
+                match encoder.encode(&chunk.content) {
+                    Ok(sv) => sparse_vectors.push(Some(sv)),
+                    Err(e) => {
+                        warn!("Failed to encode sparse vector for chunk: {}", e);
+                        sparse_vectors.push(None);
+                    }
+                }
+            }
         }
 
         // Store in Chroma if configured
         if let Some(chroma) = &self.chroma {
-            for embedded in &embedded_chunks {
+            for (idx, embedded) in embedded_chunks.iter().enumerate() {
                 let chunk = &embedded.chunk;
                 let mut metadata: HashMap<String, serde_json::Value> = HashMap::new();
                 metadata.insert("source_path".to_string(), serde_json::json!(chunk.source_path));
@@ -134,10 +142,20 @@ impl IndexingPipeline {
                 // Create a unique ID for this chunk
                 let chunk_path = format!("{}#chunk_{}", chunk.source_path, chunk.chunk_index);
 
+                // Convert sparse vector to SparseEmbedding for Chroma
+                let sparse_embedding = sparse_vectors
+                    .get(idx)
+                    .and_then(|sv| sv.as_ref())
+                    .map(|sv| SparseEmbedding {
+                        indices: sv.indices.clone(),
+                        values: sv.values.clone(),
+                    });
+
                 chroma.upsert(
                     &chunk_path,
                     &chunk.content,
                     Some(embedded.embedding.clone()),
+                    sparse_embedding,
                     Some(metadata),
                 ).await.map_err(|e| VfsError::Backend(Box::new(e)))?;
             }
@@ -241,11 +259,9 @@ impl IndexingPipeline {
     /// Delete indexed content for a file.
     pub async fn delete_file(&self, path: &str) -> Result<(), VfsError> {
         if let Some(chroma) = &self.chroma {
-            // We need to find and delete all chunks for this file
-            // Since we store chunks with paths like "path#chunk_0", we need to query by prefix
-            // For now, we'll just delete the base path (which won't work for chunks)
-            // A proper implementation would query by metadata filter
-            chroma.delete(path).await
+            // Delete all chunks for this source_path using metadata filter
+            let filter = serde_json::json!({"source_path": path});
+            chroma.delete_by_metadata(filter).await
                 .map_err(|e| VfsError::Backend(Box::new(e)))?;
         }
         Ok(())
@@ -273,6 +289,56 @@ impl IndexingPipeline {
         encoder.encode_query(query)
             .map_err(|e| VfsError::Backend(Box::new(PipelineError(e.to_string()))))
     }
+
+    /// Persist SparseEncoder state to Chroma collection metadata.
+    pub async fn persist_sparse_encoder(&self) -> Result<(), VfsError> {
+        let chroma = match &self.chroma {
+            Some(c) => c,
+            None => return Ok(()),
+        };
+
+        let encoder = self.sparse_encoder.read().await;
+        let json = encoder.to_json()
+            .map_err(|e| VfsError::Backend(Box::new(PipelineError(e.to_string()))))?;
+
+        let mut metadata = HashMap::new();
+        metadata.insert("sparse_encoder_state".to_string(), serde_json::json!(json));
+
+        chroma.set_collection_metadata(metadata).await
+            .map_err(|e| VfsError::Backend(Box::new(e)))?;
+
+        debug!("Persisted SparseEncoder state to Chroma collection metadata");
+        Ok(())
+    }
+
+    /// Load SparseEncoder state from Chroma collection metadata.
+    pub async fn load_sparse_encoder(&self) -> Result<bool, VfsError> {
+        let chroma = match &self.chroma {
+            Some(c) => c,
+            None => return Ok(false),
+        };
+
+        let metadata = chroma.get_collection_metadata().await
+            .map_err(|e| VfsError::Backend(Box::new(e)))?;
+
+        if let Some(meta) = metadata {
+            if let Some(serde_json::Value::String(json)) = meta.get("sparse_encoder_state") {
+                match SparseEncoder::from_json(json) {
+                    Ok(restored) => {
+                        let mut encoder = self.sparse_encoder.write().await;
+                        *encoder = restored;
+                        info!("Restored SparseEncoder state from Chroma collection metadata");
+                        return Ok(true);
+                    }
+                    Err(e) => {
+                        warn!("Failed to restore SparseEncoder state: {}", e);
+                    }
+                }
+            }
+        }
+
+        Ok(false)
+    }
 }
 
 /// Wrapper error type for pipeline errors.
@@ -290,7 +356,7 @@ impl std::error::Error for PipelineError {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ax_backends::MemoryBackend;
+    use ax_remote::MemoryBackend;
 
     #[tokio::test]
     async fn test_pipeline_index_file() {

@@ -653,6 +653,103 @@ describe('Multiple Operations', () => {
   });
 });
 
+describe('Rename and Copy', () => {
+  test('rename file', () => {
+    const tmpDir = createTempDir();
+    try {
+      const vfs = JsVfs.fromYaml(createTestConfig(tmpDir));
+      vfs.writeText('/workspace/original.txt', 'content');
+      vfs.rename('/workspace/original.txt', '/workspace/renamed.txt');
+      assert(!vfs.exists('/workspace/original.txt'));
+      assert(vfs.exists('/workspace/renamed.txt'));
+      assert.strictEqual(vfs.readText('/workspace/renamed.txt'), 'content');
+    } finally {
+      removeTempDir(tmpDir);
+    }
+  });
+
+  test('copy file', () => {
+    const tmpDir = createTempDir();
+    try {
+      const vfs = JsVfs.fromYaml(createTestConfig(tmpDir));
+      vfs.writeText('/workspace/src.txt', 'copy me');
+      const bytes = vfs.copy('/workspace/src.txt', '/workspace/dst.txt');
+      assert.strictEqual(bytes, 7);
+      assert(vfs.exists('/workspace/src.txt'));
+      assert(vfs.exists('/workspace/dst.txt'));
+      assert.strictEqual(vfs.readText('/workspace/dst.txt'), 'copy me');
+    } finally {
+      removeTempDir(tmpDir);
+    }
+  });
+
+  test('copy nonexistent throws', () => {
+    const tmpDir = createTempDir();
+    try {
+      const vfs = JsVfs.fromYaml(createTestConfig(tmpDir));
+      assert.throws(() => {
+        vfs.copy('/workspace/nonexistent.txt', '/workspace/dst.txt');
+      });
+    } finally {
+      removeTempDir(tmpDir);
+    }
+  });
+});
+
+describe('Grep', () => {
+  test('grep single file', () => {
+    const tmpDir = createTempDir();
+    try {
+      const vfs = JsVfs.fromYaml(createTestConfig(tmpDir));
+      vfs.writeText('/workspace/test.txt', 'hello world\nfoo bar\nhello again');
+      const matches = vfs.grep('hello', '/workspace/test.txt');
+      assert.strictEqual(matches.length, 2);
+      assert.strictEqual(matches[0].lineNumber, 1);
+      assert.strictEqual(matches[1].lineNumber, 3);
+    } finally {
+      removeTempDir(tmpDir);
+    }
+  });
+
+  test('grep directory', () => {
+    const tmpDir = createTempDir();
+    try {
+      const vfs = JsVfs.fromYaml(createTestConfig(tmpDir));
+      vfs.writeText('/workspace/a.txt', 'hello world');
+      vfs.writeText('/workspace/b.txt', 'goodbye world');
+      const matches = vfs.grep('hello', '/workspace');
+      assert.strictEqual(matches.length, 1);
+    } finally {
+      removeTempDir(tmpDir);
+    }
+  });
+
+  test('grep recursive', () => {
+    const tmpDir = createTempDir();
+    try {
+      const vfs = JsVfs.fromYaml(createTestConfig(tmpDir));
+      vfs.writeText('/workspace/a.txt', 'hello top');
+      vfs.writeText('/workspace/sub/b.txt', 'hello nested');
+      const matches = vfs.grep('hello', '/workspace', true);
+      assert.strictEqual(matches.length, 2);
+    } finally {
+      removeTempDir(tmpDir);
+    }
+  });
+
+  test('grep no matches', () => {
+    const tmpDir = createTempDir();
+    try {
+      const vfs = JsVfs.fromYaml(createTestConfig(tmpDir));
+      vfs.writeText('/workspace/test.txt', 'hello world');
+      const matches = vfs.grep('notfound', '/workspace/test.txt');
+      assert.strictEqual(matches.length, 0);
+    } finally {
+      removeTempDir(tmpDir);
+    }
+  });
+});
+
 // ============================================================================
 // Run tests and report
 // ============================================================================

@@ -1,29 +1,24 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use ax_backends::{ChromaBackend, QueryResult as ChromaQueryResult};
-use ax_indexing::{SearchResult, Chunk, SparseEncoder, SparseVector};
-use tokio::sync::RwLock;
+use ax_core::{ChromaStore, QueryResult as ChromaQueryResult, SparseEmbedding, VfsError};
+use crate::types::{SearchResult, Chunk};
 
-use crate::error::VfsError;
 use crate::pipeline::IndexingPipeline;
 
 /// Search mode configuration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default)]
 pub enum SearchMode {
     /// Dense-only search using vector embeddings.
     Dense,
     /// Sparse-only search using BM25.
     Sparse,
     /// Hybrid search combining dense and sparse scores.
+    #[default]
     Hybrid,
 }
 
-impl Default for SearchMode {
-    fn default() -> Self {
-        SearchMode::Hybrid
-    }
-}
 
 /// Configuration for search queries.
 #[derive(Debug, Clone)]
@@ -52,12 +47,10 @@ impl Default for SearchConfig {
     }
 }
 
-/// Search engine that combines dense and sparse search.
+/// Search engine that queries Chroma for both dense and sparse search.
 pub struct SearchEngine {
     pipeline: Arc<IndexingPipeline>,
-    chroma: Option<Arc<ChromaBackend>>,
-    /// Cached sparse vectors for documents (for sparse search without Chroma).
-    sparse_cache: RwLock<HashMap<String, (Chunk, SparseVector)>>,
+    chroma: Option<Arc<dyn ChromaStore>>,
 }
 
 impl SearchEngine {
@@ -66,12 +59,11 @@ impl SearchEngine {
         SearchEngine {
             pipeline,
             chroma: None,
-            sparse_cache: RwLock::new(HashMap::new()),
         }
     }
 
-    /// Set the Chroma backend for dense search.
-    pub fn with_chroma(mut self, chroma: Arc<ChromaBackend>) -> Self {
+    /// Set the Chroma backend for search.
+    pub fn with_chroma(mut self, chroma: Arc<dyn ChromaStore>) -> Self {
         self.chroma = Some(chroma);
         self
     }
@@ -110,64 +102,71 @@ impl SearchEngine {
         Ok(search_results)
     }
 
-    /// Perform sparse (BM25) search.
+    /// Perform sparse (BM25) search via Chroma.
     async fn search_sparse(
         &self,
         query: &str,
         config: &SearchConfig,
     ) -> Result<Vec<SearchResult>, VfsError> {
+        let chroma = self.chroma.as_ref().ok_or_else(|| {
+            VfsError::Config("Chroma backend required for sparse search".to_string())
+        })?;
+
         let query_vector = self.pipeline.encode_sparse_query(query).await?;
-        let cache = self.sparse_cache.read().await;
+        let query_sparse = SparseEmbedding {
+            indices: query_vector.indices,
+            values: query_vector.values,
+        };
 
-        let mut results: Vec<(Chunk, f32)> = Vec::new();
+        let results = chroma
+            .query_by_sparse_embedding(&query_sparse, config.limit)
+            .await
+            .map_err(|e| VfsError::Backend(Box::new(e)))?;
 
-        for (_id, (chunk, doc_vector)) in cache.iter() {
-            let score = SparseEncoder::dot_product(&query_vector, doc_vector);
-            if score > config.min_score {
-                results.push((chunk.clone(), score));
-            }
-        }
-
-        // Sort by score descending
-        results.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-
-        // Take top N
-        let results: Vec<SearchResult> = results
+        let search_results: Vec<SearchResult> = results
             .into_iter()
-            .take(config.limit)
-            .map(|(chunk, score)| SearchResult {
-                chunk,
-                score,
-                dense_score: None,
-                sparse_score: Some(score),
+            .filter(|r| r.score > config.min_score)
+            .map(|r| {
+                let chunk = self.result_to_chunk(&r);
+                SearchResult {
+                    chunk,
+                    score: r.score,
+                    dense_score: None,
+                    sparse_score: Some(r.score),
+                }
             })
             .collect();
 
-        Ok(results)
+        Ok(search_results)
     }
 
-    /// Perform hybrid search combining dense and sparse.
+    /// Perform hybrid search combining dense and sparse results from Chroma.
     async fn search_hybrid(
         &self,
         query: &str,
         config: &SearchConfig,
     ) -> Result<Vec<SearchResult>, VfsError> {
-        // If no Chroma, fall back to sparse-only
-        let chroma = match &self.chroma {
-            Some(c) => c,
-            None => return self.search_sparse(query, config).await,
-        };
+        let chroma = self.chroma.as_ref().ok_or_else(|| {
+            VfsError::Config("Chroma backend required for hybrid search".to_string())
+        })?;
 
-        // Get dense results
+        // Get dense results from Chroma
         let query_embedding = self.pipeline.embed_query(query).await?;
         let dense_results = chroma
             .query_by_embedding(query_embedding, config.limit * 2)
             .await
             .map_err(|e| VfsError::Backend(Box::new(e)))?;
 
-        // Get sparse results
+        // Get sparse results from Chroma
         let query_vector = self.pipeline.encode_sparse_query(query).await?;
-        let cache = self.sparse_cache.read().await;
+        let query_sparse = SparseEmbedding {
+            indices: query_vector.indices,
+            values: query_vector.values,
+        };
+        let sparse_results = chroma
+            .query_by_sparse_embedding(&query_sparse, config.limit * 2)
+            .await
+            .map_err(|e| VfsError::Backend(Box::new(e)))?;
 
         // Build score maps
         let mut combined_scores: HashMap<String, (Option<Chunk>, f32, f32)> = HashMap::new();
@@ -180,14 +179,13 @@ impl SearchEngine {
         }
 
         // Add sparse scores
-        for (_id, (chunk, doc_vector)) in cache.iter() {
-            let sparse_score = SparseEncoder::dot_product(&query_vector, doc_vector);
-            if sparse_score > 0.0 {
-                combined_scores
-                    .entry(chunk.id.clone())
-                    .and_modify(|(_, _, s)| *s = sparse_score)
-                    .or_insert((Some(chunk.clone()), 0.0, sparse_score));
-            }
+        for result in &sparse_results {
+            let chunk = self.result_to_chunk(result);
+            let chunk_id = chunk.id.clone();
+            combined_scores
+                .entry(chunk_id)
+                .and_modify(|(_, _, s)| *s = result.score)
+                .or_insert((Some(chunk), 0.0, result.score));
         }
 
         // Calculate hybrid scores
@@ -223,18 +221,6 @@ impl SearchEngine {
         results.truncate(config.limit);
 
         Ok(results)
-    }
-
-    /// Add a document to the sparse cache for BM25 search.
-    pub async fn add_to_sparse_cache(&self, chunk: Chunk, sparse_vector: SparseVector) {
-        let mut cache = self.sparse_cache.write().await;
-        cache.insert(chunk.id.clone(), (chunk, sparse_vector));
-    }
-
-    /// Clear the sparse cache.
-    pub async fn clear_sparse_cache(&self) {
-        let mut cache = self.sparse_cache.write().await;
-        cache.clear();
     }
 
     /// Convert Chroma query results to search results.
@@ -309,45 +295,27 @@ mod tests {
     use crate::pipeline::PipelineConfig;
 
     #[tokio::test]
-    async fn test_search_engine_sparse() {
+    async fn test_search_engine_requires_chroma() {
         let config = PipelineConfig::default();
         let pipeline = Arc::new(IndexingPipeline::new(config).unwrap());
         let engine = SearchEngine::new(pipeline.clone());
 
-        // Add some test data to the sparse cache
-        let chunk = Chunk {
-            id: "test1".to_string(),
-            source_path: "/test.txt".to_string(),
-            content: "hello world test document".to_string(),
-            start_offset: 0,
-            end_offset: 25,
-            start_line: 1,
-            end_line: 1,
-            chunk_index: 0,
-            total_chunks: 1,
-            metadata: HashMap::new(),
+        // Without Chroma, dense/sparse/hybrid search should return an error
+        let search_config = SearchConfig {
+            mode: SearchMode::Dense,
+            limit: 10,
+            min_score: 0.0,
+            ..Default::default()
         };
+        assert!(engine.search("hello", &search_config).await.is_err());
 
-        // Build the sparse encoder with this document
-        {
-            let encoder_lock = pipeline.sparse_encoder();
-            let mut encoder = encoder_lock.write().await;
-            encoder.update_idf(&chunk.content);
-            let sparse_vec = encoder.encode(&chunk.content).unwrap();
-            engine.add_to_sparse_cache(chunk, sparse_vec).await;
-        }
-
-        // Search
         let search_config = SearchConfig {
             mode: SearchMode::Sparse,
             limit: 10,
             min_score: 0.0,
             ..Default::default()
         };
-
-        let results = engine.search("hello world", &search_config).await.unwrap();
-        assert!(!results.is_empty());
-        assert!(results[0].sparse_score.is_some());
+        assert!(engine.search("hello", &search_config).await.is_err());
     }
 
     #[tokio::test]

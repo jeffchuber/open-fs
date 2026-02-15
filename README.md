@@ -4,12 +4,15 @@ A virtual filesystem designed for AI agents and automation. AX provides a unifie
 
 ## Features
 
-- **Multiple Backends**: Local filesystem, S3-compatible storage, PostgreSQL, and Chroma vector database
+- **9 Storage Backends**: Local filesystem, memory, S3-compatible, PostgreSQL, Chroma vector DB, WebDAV, SFTP, Google Cloud Storage, Azure Blob Storage
 - **Mount-based Routing**: Unix-like mount points for organizing different backends
-- **Caching**: LRU cache with TTL support for improved performance
-- **Sync Engine**: Write-through and write-back modes for remote backends
-- **Semantic Search**: Text chunking, embeddings, and hybrid search (dense + sparse)
-- **AI Tool Generation**: Generate tool definitions for MCP, OpenAI, and other formats
+- **Caching**: Lock-free LRU cache (moka) with TTL support
+- **Sync Engine**: Write-through, write-back, and pull-mirror modes with WAL-based durability
+- **Semantic Search**: Text chunking, embeddings, and hybrid search (dense + BM25 sparse) via Chroma
+- **FUSE Filesystem**: Mount the VFS as a native filesystem (macOS/Linux, Windows stub)
+- **MCP Server**: JSON-RPC 2.0 Model Context Protocol server over stdio (7 tools)
+- **REST API**: Axum-based HTTP API with OpenAPI spec
+- **AI Tool Generation**: Generate tool definitions for MCP, OpenAI, and JSON formats
 - **Language Bindings**: Python (PyO3) and TypeScript (napi-rs) support
 
 ## Installation
@@ -18,7 +21,7 @@ A virtual filesystem designed for AI agents and automation. AX provides a unifie
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/ax.git
+git clone https://github.com/ax-vfs/ax.git
 cd ax
 
 # Build the CLI
@@ -98,11 +101,20 @@ ax rm /workspace/hello.txt
 | `tree [path]` | Show directory tree |
 | `find <pattern>` | Find files by regex pattern |
 | `grep <pattern> [path]` | Search file contents |
+| `index [path]` | Index files for semantic search (`--incremental`, `--force`) |
+| `index-status` | Show index state (files, chunks, last updated) |
+| `search <query>` | Semantic search in indexed files |
+| `watch` | Watch for changes with auto-indexing |
+| `mount <path>` | FUSE mount the VFS |
+| `unmount <path>` | FUSE unmount |
+| `serve` | Start REST API server |
+| `mcp` | Start MCP server (stdio) |
 | `config` | Show effective configuration |
 | `status` | Show VFS status and stats |
+| `validate` | Validate configuration |
+| `migrate` | Migrate configuration to latest format |
 | `tools` | Generate AI tool definitions |
-| `index [path]` | Index files for semantic search |
-| `search <query>` | Semantic search in indexed files |
+| `wal` | WAL management (checkpoint, status) |
 
 ## Configuration
 
@@ -114,6 +126,13 @@ backends:
   local:
     type: fs
     root: ./data
+```
+
+#### Memory
+```yaml
+backends:
+  mem:
+    type: memory
 ```
 
 #### S3-Compatible Storage
@@ -137,6 +156,46 @@ backends:
     connection_url: postgres://user:pass@localhost/db
     table_name: ax_files
     max_connections: 5
+```
+
+#### WebDAV
+```yaml
+backends:
+  nas:
+    type: webdav
+    url: https://server/dav
+    username: user
+    password: ${WEBDAV_PASS}
+```
+
+#### SFTP
+```yaml
+backends:
+  remote:
+    type: sftp
+    host: server.example.com
+    username: deploy
+    private_key: ~/.ssh/id_ed25519
+    root: /var/data
+```
+
+#### Google Cloud Storage
+```yaml
+backends:
+  gcs:
+    type: gcs
+    bucket: my-gcs-bucket
+    prefix: data/
+```
+
+#### Azure Blob Storage
+```yaml
+backends:
+  azure:
+    type: azure_blob
+    container: my-container
+    account: mystorageaccount
+    access_key: ${AZURE_KEY}
 ```
 
 ### Mount Options
@@ -258,23 +317,23 @@ const tools = vfs.tools('mcp');
 ### Indexing Files
 
 ```bash
-# Index a directory with Chroma
-ax index /workspace --chroma-endpoint http://localhost:8000 --collection docs
+# Full index
+ax index /workspace
 
-# Custom chunking
-ax index /workspace --chunker recursive --chunk-size 500
+# Incremental (only changed files)
+ax index /workspace --incremental
+
+# Force full re-index
+ax index /workspace --force
+
+# Check index status
+ax index-status
 ```
 
 ### Searching
 
 ```bash
-# Dense search (embeddings only)
-ax search "how to configure backends" --mode dense
-
-# Sparse search (BM25 keyword matching)
-ax search "configuration yaml" --mode sparse
-
-# Hybrid search (default)
+# Hybrid search (default — dense + BM25 sparse)
 ax search "mount point configuration" --limit 5
 ```
 
@@ -283,13 +342,17 @@ ax search "mount point configuration" --limit 5
 ```
 ax/
 ├── crates/
-│   ├── ax-config/     # Configuration parsing and validation
-│   ├── ax-core/       # VFS, routing, caching, sync, tools
-│   ├── ax-backends/   # Storage backends (fs, s3, postgres, chroma)
-│   ├── ax-indexing/   # Text chunking, embeddings, search
-│   ├── ax-cli/        # Command-line interface
-│   ├── ax-ffi/        # Python bindings (PyO3)
-│   └── ax-js/         # TypeScript bindings (napi-rs)
+│   ├── ax-config/     # Configuration parsing, validation, env interpolation
+│   ├── ax-core/       # VFS, routing, caching, sync/WAL, tools, search, pipeline
+│   ├── ax-backends/   # Storage backends (fs, memory, s3, postgres, chroma, webdav, sftp, gcs, azure)
+│   ├── ax-indexing/   # Text chunking, embeddings, BM25 sparse, hybrid search
+│   ├── ax-fuse/       # FUSE filesystem (macOS/Linux + Windows stub)
+│   ├── ax-mcp/        # MCP server (JSON-RPC 2.0 over stdio)
+│   ├── ax-server/     # REST API server (Axum)
+│   ├── ax-cli/        # Command-line interface (27 subcommands)
+│   ├── ax-ffi/        # Python bindings (PyO3, excluded from default build)
+│   └── ax-js/         # TypeScript bindings (napi-rs, excluded from default build)
+├── docs/              # Architecture, guides, and status docs
 └── examples/          # Example configurations
 ```
 

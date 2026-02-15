@@ -1,0 +1,46 @@
+[package]
+name = "ax-local"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Local indexing engine with chunking, embedding, and search for AX"
+
+[dependencies]
+ax-config = { path = "../ax-config" }
+ax-core = { path = "../ax-core" }
+blake3 = "1"
+tokio = { version = "1", features = ["full"] }
+async-trait = "0.1"
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.12", features = ["json"], optional = true }
+tracing = "0.1"
+uuid = { version = "1", features = ["v4"] }
+notify = "7"
+rusqlite = { version = "0.32", features = ["bundled"] }
+chrono = { version = "0.4", features = ["serde"] }
+
+# Tree-sitter for AST chunking
+tree-sitter = { version = "0.24", optional = true }
+tree-sitter-rust = { version = "0.23", optional = true }
+tree-sitter-python = { version = "0.23", optional = true }
+tree-sitter-javascript = { version = "0.23", optional = true }
+tree-sitter-typescript = { version = "0.23", optional = true }
+tree-sitter-go = { version = "0.23", optional = true }
+
+# PDF text extraction
+pdf-extract = { version = "0.8", optional = true }
+
+[features]
+default = ["embedder-ollama", "embedder-openai"]
+embedder-ollama = ["reqwest"]
+embedder-openai = ["reqwest"]
+chunker-ast = ["tree-sitter", "tree-sitter-rust", "tree-sitter-python", "tree-sitter-javascript", "tree-sitter-typescript", "tree-sitter-go"]
+extractor-pdf = ["pdf-extract"]
+
+[dev-dependencies]
+ax-remote = { path = "../ax-remote" }
+tokio = { version = "1", features = ["full", "test-util"] }
+tempfile = "3"

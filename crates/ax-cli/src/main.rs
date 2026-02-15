@@ -1,10 +1,12 @@
 use std::path::PathBuf;
+use std::process::ExitCode;
 
 use ax_config::VfsConfig;
-use ax_core::Vfs;
+use ax_remote::Vfs;
 use clap::{Parser, Subcommand};
 
 mod commands;
+mod errors;
 
 #[derive(Parser)]
 #[command(name = "ax", version, about = "Agentic Files - Virtual Filesystem")]
@@ -122,6 +124,12 @@ enum Commands {
         /// Chunk size in characters
         #[arg(long)]
         chunk_size: Option<usize>,
+        /// Enable incremental indexing (only re-index changed files)
+        #[arg(long)]
+        incremental: bool,
+        /// Force full re-index, ignoring incremental state
+        #[arg(long)]
+        force: bool,
     },
     /// Semantic search in indexed files
     Search {
@@ -152,6 +160,18 @@ enum Commands {
         /// Polling interval in seconds
         #[arg(short, long, default_value = "2")]
         interval: u64,
+        /// Use polling mode instead of native notifications
+        #[arg(long)]
+        poll: bool,
+        /// Automatically index changed files
+        #[arg(long)]
+        auto_index: bool,
+        /// Webhook URL to POST change notifications to
+        #[arg(long)]
+        webhook: Option<String>,
+        /// Debounce interval in milliseconds
+        #[arg(long, default_value = "500")]
+        debounce: u64,
     },
     /// Generate tool definitions for AI agents
     Tools {
@@ -161,6 +181,71 @@ enum Commands {
         /// Pretty-print output
         #[arg(short, long)]
         pretty: bool,
+    },
+    /// Mount AX VFS as a FUSE filesystem
+    #[cfg_attr(not(feature = "fuse"), command(hide = true))]
+    Mount {
+        /// Directory to mount the VFS at
+        mountpoint: std::path::PathBuf,
+        /// Run in foreground (don't daemonize)
+        #[arg(short, long)]
+        foreground: bool,
+        /// Auto-index files on mount
+        #[arg(long)]
+        auto_index: bool,
+    },
+    /// Unmount AX FUSE filesystem
+    Unmount {
+        /// Mount point to unmount
+        mountpoint: std::path::PathBuf,
+        /// Force unmount even if busy
+        #[arg(short, long)]
+        force: bool,
+    },
+    /// Show index status (files indexed, total chunks, last updated)
+    IndexStatus {
+        /// Path to index state file (defaults to .ax-index-state.json)
+        #[arg(long)]
+        state_file: Option<String>,
+    },
+    /// Validate configuration file
+    Validate,
+    /// Migrate configuration to current version
+    Migrate,
+    /// Run as an MCP (Model Context Protocol) server over stdio
+    Mcp,
+    /// Start the AX REST API server
+    Serve {
+        /// Host to bind to
+        #[arg(long, default_value = "127.0.0.1")]
+        host: String,
+        /// Port to bind to
+        #[arg(short, long, default_value = "19557")]
+        port: u16,
+        /// API key for authentication (optional)
+        #[arg(long)]
+        api_key: Option<String>,
+    },
+    /// Manage the Write-Ahead Log (WAL)
+    Wal {
+        #[command(subcommand)]
+        action: WalAction,
+    },
+}
+
+#[derive(Subcommand)]
+enum WalAction {
+    /// Checkpoint: prune old applied WAL entries
+    Checkpoint {
+        /// Path to the directory containing the WAL database
+        #[arg(long)]
+        dir: Option<PathBuf>,
+    },
+    /// Show WAL and outbox status
+    Status {
+        /// Path to the directory containing the WAL database
+        #[arg(long)]
+        dir: Option<PathBuf>,
     },
 }
 
@@ -190,14 +275,34 @@ fn find_config() -> Option<PathBuf> {
     None
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let cli = Cli::parse();
-
+async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
     // Find config file
     let config_path = cli.config.or_else(find_config).ok_or(
         "No configuration file found. Use --config, set AX_CONFIG, or create ax.yaml",
     )?;
+
+    // Commands that don't need a VFS (or create their own)
+    match &cli.command {
+        Commands::Validate => {
+            return commands::validate::run(&config_path).await;
+        }
+        Commands::Migrate => {
+            return commands::migrate::run(&config_path).await;
+        }
+        Commands::IndexStatus { state_file } => {
+            return commands::index_status::run(state_file.clone()).await;
+        }
+        Commands::Mcp => {
+            return commands::mcp::run(&config_path).await;
+        }
+        Commands::Wal { action: WalAction::Checkpoint { dir } } => {
+            return commands::wal::run_checkpoint(dir.clone()).await;
+        }
+        Commands::Wal { action: WalAction::Status { dir } } => {
+            return commands::wal::run_status(dir.clone()).await;
+        }
+        _ => {}
+    }
 
     // Load and parse config
     let config = VfsConfig::from_file(&config_path)?;
@@ -261,8 +366,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             recursive,
             chunker,
             chunk_size,
+            incremental,
+            force,
         } => {
-            commands::index::run(&vfs, path, chroma_endpoint, collection, recursive, chunker, chunk_size).await?;
+            commands::index::run(&vfs, path, chroma_endpoint, collection, recursive, chunker, chunk_size, incremental, force).await?;
         }
         Commands::Search {
             query,
@@ -277,13 +384,73 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Commands::Status => {
             commands::status::run(&vfs).await?;
         }
-        Commands::Watch { path, interval } => {
-            commands::watch::run(&vfs, path, interval).await?;
+        Commands::Watch { path, interval, poll, auto_index, webhook, debounce } => {
+            commands::watch::run(&vfs, path, interval, poll, auto_index, webhook, debounce).await?;
         }
         Commands::Tools { format, pretty } => {
             commands::tools::run(&vfs, format, pretty).await?;
         }
+        Commands::Mount { mountpoint, foreground, auto_index } => {
+            // Mount doesn't need the VFS, it creates its own
+            // We need to re-load config for the mount command
+            drop(vfs); // Drop the existing VFS
+            let config = VfsConfig::from_file(&config_path)?;
+            let args = commands::mount::MountArgs {
+                mountpoint,
+                foreground,
+                auto_index,
+            };
+            commands::mount::run(config, args)?;
+        }
+        Commands::Unmount { mountpoint, force } => {
+            let args = commands::unmount::UnmountArgs {
+                mountpoint,
+                force,
+            };
+            commands::unmount::run(args)?;
+        }
+        Commands::IndexStatus { state_file } => {
+            commands::index_status::run(state_file).await?;
+        }
+        Commands::Mcp => {
+            commands::mcp::run(&config_path).await?;
+        }
+        Commands::Serve { host, port, api_key } => {
+            commands::serve::run(vfs, &host, port, api_key).await?;
+        }
+        // These are handled above before VFS creation; this branch is logically
+        // unreachable due to the early return, but we return an error instead of
+        // panicking if it's ever reached due to a code change.
+        Commands::Validate | Commands::Migrate | Commands::Wal { .. } => {
+            return Err("Internal error: command should have been handled earlier".into());
+        }
     }
 
     Ok(())
+}
+
+#[tokio::main]
+async fn main() -> ExitCode {
+    let cli = match Cli::try_parse() {
+        Ok(cli) => cli,
+        Err(err) => {
+            let _ = err.print();
+            let code = err.exit_code();
+            let code = if code < 0 {
+                1u8
+            } else if code > 255 {
+                255u8
+            } else {
+                code as u8
+            };
+            return ExitCode::from(code);
+        }
+    };
+
+    if let Err(e) = run(cli).await {
+        errors::print_error(e.as_ref());
+        return ExitCode::FAILURE;
+    }
+
+    ExitCode::SUCCESS
 }
