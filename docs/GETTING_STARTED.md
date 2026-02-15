@@ -95,6 +95,13 @@ ax search "how authentication works" --limit 5
 ax mcp
 ```
 
+## Sync
+
+```bash
+ax sync status
+ax sync flush
+```
+
 ## FUSE mount (macOS/Linux)
 
 ```bash

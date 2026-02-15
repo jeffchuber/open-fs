@@ -55,6 +55,7 @@ yarn-error.log*
 /data/
 /test-data/
 /tmp/
+/.ax/
 *.log
 
 # Coverage

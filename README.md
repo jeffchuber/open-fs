@@ -98,6 +98,7 @@ ax grep "Hello" /workspace --recursive
 | `index-status` | Show index status |
 | `search <query>` | Semantic search |
 | `watch` | Watch filesystem changes |
+| `sync` | Sync status + manual write-back flush |
 | `mount <path>` | FUSE mount (feature `fuse`) |
 | `unmount <path>` | FUSE unmount |
 | `mcp` | Start MCP server |
@@ -158,6 +159,15 @@ ax mcp
 ```bash
 ax --config ax.yaml mount ~/ax-mount
 ax unmount ~/ax-mount
+```
+
+## Write-Back Sync
+
+For write-back mounts, inspect sync state and force a flush:
+
+```bash
+ax sync status
+ax sync flush
 ```
 
 ## License

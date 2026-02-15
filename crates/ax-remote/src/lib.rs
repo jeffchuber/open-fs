@@ -13,7 +13,7 @@ pub use chroma_http::ChromaHttpBackend;
 pub use grep::{grep, GrepMatch, GrepOptions};
 pub use router::{Mount, Router};
 pub use sync::{SyncConfig, SyncMode, SyncStats};
-pub use vfs::Vfs;
+pub use vfs::{MountSyncStatus, Vfs};
 pub use wal::{WalConfig, WriteAheadLog};
 
 #[cfg(feature = "s3")]

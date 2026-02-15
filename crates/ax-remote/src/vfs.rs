@@ -1,9 +1,10 @@
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use ax_config::{BackendConfig, DefaultsConfig, MountMode, SyncConfig as MountSyncConfig, VfsConfig, WriteMode};
-use tracing::{debug, instrument};
+use tracing::{debug, info, instrument, warn};
 
 use ax_core::{Backend, BackendError, CacheConfig, Entry, VfsError};
 use crate::backends;
@@ -11,6 +12,7 @@ use crate::cached_backend::CachedBackend;
 use crate::chroma_http::ChromaHttpBackend;
 use crate::router::{Mount, Router};
 use crate::sync::{SyncConfig, SyncMode};
+use crate::wal::{OutboxEntry, OutboxStatus, WalConfig, WalOpType, WriteAheadLog};
 
 /// Wrapper to hold `Arc<dyn Backend>` as a concrete type for `CachedBackend<B>`.
 #[derive(Clone)]
@@ -81,6 +83,104 @@ fn sync_config_for_mount(
 
     config.mode = sync_mode;
     config
+}
+
+fn wal_dir() -> Result<PathBuf, VfsError> {
+    if let Ok(path) = std::env::var("AX_WAL_DIR") {
+        let path = PathBuf::from(path);
+        std::fs::create_dir_all(&path).map_err(VfsError::from)?;
+        return Ok(path);
+    }
+
+    let cwd = std::env::current_dir().map_err(VfsError::from)?;
+    let dir = cwd.join(".ax");
+    std::fs::create_dir_all(&dir).map_err(VfsError::from)?;
+    Ok(dir)
+}
+
+fn sanitize_mount_for_filename(mount_path: &str) -> String {
+    let trimmed = mount_path.trim_matches('/');
+    if trimmed.is_empty() {
+        return "root".to_string();
+    }
+    trimmed
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+        .collect()
+}
+
+fn wal_path_for_mount(mount_path: &str) -> Result<PathBuf, VfsError> {
+    Ok(wal_dir()?.join(format!(
+        "wal_{}.db",
+        sanitize_mount_for_filename(mount_path)
+    )))
+}
+
+async fn apply_outbox_entry(
+    backend: Arc<dyn Backend>,
+    entry: &OutboxEntry,
+) -> Result<(), VfsError> {
+    match entry.op_type {
+        WalOpType::Write => {
+            let content = entry.content.clone().ok_or_else(|| {
+                VfsError::Config(format!("Outbox write entry {} missing content", entry.id))
+            })?;
+            backend.write(&entry.path, &content).await.map_err(VfsError::from)
+        }
+        WalOpType::Append => {
+            let content = entry.content.clone().ok_or_else(|| {
+                VfsError::Config(format!("Outbox append entry {} missing content", entry.id))
+            })?;
+            backend.append(&entry.path, &content).await.map_err(VfsError::from)
+        }
+        WalOpType::Delete => {
+            match backend.delete(&entry.path).await {
+                Ok(()) => Ok(()),
+                Err(BackendError::NotFound(_)) => Ok(()),
+                Err(e) => Err(VfsError::from(e)),
+            }
+        }
+    }
+}
+
+async fn replay_outbox_entries(
+    wal: &WriteAheadLog,
+    backend: Arc<dyn Backend>,
+) -> Result<usize, VfsError> {
+    let mut applied = 0usize;
+
+    loop {
+        let ready = wal
+            .fetch_ready_outbox(128)
+            .map_err(|e| VfsError::Config(format!("Failed to fetch outbox entries: {}", e)))?;
+
+        if ready.is_empty() {
+            break;
+        }
+
+        for entry in ready {
+            if entry.status != OutboxStatus::Pending {
+                continue;
+            }
+
+            wal.mark_processing(entry.id)
+                .map_err(|e| VfsError::Config(format!("Failed to mark outbox processing: {}", e)))?;
+
+            match apply_outbox_entry(backend.clone(), &entry).await {
+                Ok(()) => {
+                    wal.complete_outbox(entry.id)
+                        .map_err(|e| VfsError::Config(format!("Failed to complete outbox entry: {}", e)))?;
+                    applied += 1;
+                }
+                Err(e) => {
+                    let _ = wal.fail_outbox(entry.id, &e.to_string());
+                    warn!("Outbox replay failed for {}: {}", entry.path, e);
+                }
+            }
+        }
+    }
+
+    Ok(applied)
 }
 
 /// Create a backend instance from a BackendConfig.
@@ -162,6 +262,32 @@ async fn create_backend(
 pub struct Vfs {
     config: VfsConfig,
     router: Router,
+    mount_runtimes: Vec<MountRuntime>,
+}
+
+struct MountRuntime {
+    mount_path: String,
+    backend_name: String,
+    sync_mode: SyncMode,
+    read_only: bool,
+    backend: Arc<dyn Backend>,
+    cached_backend: Arc<CachedBackend<DynBackend>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct MountSyncStatus {
+    pub mount_path: String,
+    pub backend_name: String,
+    pub sync_mode: SyncMode,
+    pub read_only: bool,
+    pub pending: usize,
+    pub synced: u64,
+    pub failed: u64,
+    pub retries: u64,
+    pub outbox_pending: Option<usize>,
+    pub outbox_processing: Option<usize>,
+    pub outbox_failed: Option<usize>,
+    pub outbox_wal_unapplied: Option<usize>,
 }
 
 impl Vfs {
@@ -180,6 +306,7 @@ impl Vfs {
 
         // Build mounts
         let mut mounts = Vec::new();
+        let mut mount_runtimes = Vec::new();
         for mount_config in &effective_config.mounts {
             let backend_name = mount_config.backend.as_ref().ok_or_else(|| {
                 VfsError::Config(format!(
@@ -208,12 +335,40 @@ impl Vfs {
             }
 
             let sync_ref = raw_backend.clone();
-            let cached_backend = CachedBackend::new(
-                DynBackend(raw_backend.clone()),
-                cache_config,
-                sync_config.clone(),
-                read_only,
-            );
+            let cached_backend = if sync_config.mode == SyncMode::WriteBack {
+                let wal_path = wal_path_for_mount(&mount_config.path)?;
+                let wal = Arc::new(
+                    WriteAheadLog::new(&wal_path, WalConfig::default()).map_err(|e| {
+                        VfsError::Config(format!(
+                            "Failed to initialize WAL for mount '{}': {}",
+                            mount_config.path, e
+                        ))
+                    })?,
+                );
+
+                let recovered = replay_outbox_entries(wal.as_ref(), raw_backend.clone()).await?;
+                if recovered > 0 {
+                    info!(
+                        "Recovered {} outbox operation(s) for mount {}",
+                        recovered, mount_config.path
+                    );
+                }
+
+                Arc::new(CachedBackend::new_with_wal(
+                    DynBackend(raw_backend.clone()),
+                    cache_config,
+                    sync_config.clone(),
+                    read_only,
+                    wal,
+                ))
+            } else {
+                Arc::new(CachedBackend::new(
+                    DynBackend(raw_backend.clone()),
+                    cache_config,
+                    sync_config.clone(),
+                    read_only,
+                ))
+            };
 
             if sync_config.mode == SyncMode::WriteBack {
                 cached_backend
@@ -229,12 +384,21 @@ impl Vfs {
                     .await;
             }
 
-            let mount_backend: Arc<dyn Backend> = Arc::new(cached_backend);
+            let mount_backend: Arc<dyn Backend> = cached_backend.clone();
 
             mounts.push(Mount {
                 path: mount_config.path.clone(),
                 backend: mount_backend,
                 read_only,
+            });
+
+            mount_runtimes.push(MountRuntime {
+                mount_path: mount_config.path.clone(),
+                backend_name: backend_name.clone(),
+                sync_mode: sync_config.mode,
+                read_only,
+                backend: raw_backend.clone(),
+                cached_backend,
             });
         }
 
@@ -243,6 +407,7 @@ impl Vfs {
         Ok(Vfs {
             config: effective_config,
             router,
+            mount_runtimes,
         })
     }
 
@@ -342,6 +507,67 @@ impl Vfs {
         &self.config
     }
 
+    /// Return per-mount sync status (including durable outbox counts when WAL is enabled).
+    pub async fn sync_statuses(&self) -> Result<Vec<MountSyncStatus>, VfsError> {
+        let mut statuses = Vec::with_capacity(self.mount_runtimes.len());
+
+        for runtime in &self.mount_runtimes {
+            let sync = runtime.cached_backend.sync_stats().await;
+            let outbox = runtime
+                .cached_backend
+                .wal()
+                .map(|wal| {
+                    wal.outbox_stats()
+                        .map_err(|e| VfsError::Config(format!("Failed to read outbox stats: {}", e)))
+                })
+                .transpose()?;
+
+            statuses.push(MountSyncStatus {
+                mount_path: runtime.mount_path.clone(),
+                backend_name: runtime.backend_name.clone(),
+                sync_mode: runtime.sync_mode,
+                read_only: runtime.read_only,
+                pending: sync.pending,
+                synced: sync.synced,
+                failed: sync.failed,
+                retries: sync.retries,
+                outbox_pending: outbox.as_ref().map(|s| s.pending),
+                outbox_processing: outbox.as_ref().map(|s| s.processing),
+                outbox_failed: outbox.as_ref().map(|s| s.failed),
+                outbox_wal_unapplied: outbox.as_ref().map(|s| s.wal_unapplied),
+            });
+        }
+
+        Ok(statuses)
+    }
+
+    /// Flush all write-back mounts and replay any remaining durable outbox entries.
+    pub async fn flush_write_back(&self) -> Result<usize, VfsError> {
+        let mut flushed_mounts = 0usize;
+
+        for runtime in &self.mount_runtimes {
+            if runtime.sync_mode != SyncMode::WriteBack {
+                continue;
+            }
+
+            runtime.cached_backend.shutdown_sync().await;
+
+            if let Some(wal) = runtime.cached_backend.wal() {
+                let replayed = replay_outbox_entries(wal.as_ref(), runtime.backend.clone()).await?;
+                if replayed > 0 {
+                    info!(
+                        "Replayed {} outbox operation(s) during flush for mount {}",
+                        replayed, runtime.mount_path
+                    );
+                }
+            }
+
+            flushed_mounts += 1;
+        }
+
+        Ok(flushed_mounts)
+    }
+
     /// Resolve a VFS path to its physical filesystem path.
     /// Returns None for non-fs backends (S3, Postgres, Chroma, API).
     pub fn resolve_fs_path(&self, vfs_path: &str) -> Option<std::path::PathBuf> {
@@ -386,6 +612,26 @@ mounts:
     backend: local
 "#,
             root
+        );
+        VfsConfig::from_yaml(&yaml).unwrap()
+    }
+
+    fn make_write_back_config(root: &str, mount_path: &str, interval: &str) -> VfsConfig {
+        let yaml = format!(
+            r#"
+name: test-vfs-write-back
+backends:
+  local:
+    type: fs
+    root: {}
+mounts:
+  - path: {}
+    backend: local
+    mode: write_back
+    sync:
+      interval: {}
+"#,
+            root, mount_path, interval
         );
         VfsConfig::from_yaml(&yaml).unwrap()
     }
@@ -538,5 +784,58 @@ mounts:
 
         let content = vfs.read("/workspace/renamed.txt").await.unwrap();
         assert_eq!(content, b"content");
+    }
+
+    #[tokio::test]
+    async fn test_vfs_flush_write_back() {
+        let mount_path = "/wb_flush_test";
+        let wal_path = wal_path_for_mount(mount_path).unwrap();
+        let _ = std::fs::remove_file(&wal_path);
+
+        let temp_dir = TempDir::new().unwrap();
+        let config = make_write_back_config(
+            temp_dir.path().to_str().unwrap(),
+            mount_path,
+            "24h",
+        );
+        let vfs = Vfs::from_config(config).await.unwrap();
+
+        vfs.write("/wb_flush_test/file.txt", b"flush me").await.unwrap();
+        vfs.flush_write_back().await.unwrap();
+
+        let on_disk = std::fs::read(temp_dir.path().join("file.txt")).unwrap();
+        assert_eq!(on_disk, b"flush me");
+    }
+
+    #[tokio::test]
+    async fn test_vfs_recovers_write_back_outbox_on_startup() {
+        let mount_path = "/wb_recover_test";
+        let wal_path = wal_path_for_mount(mount_path).unwrap();
+        let _ = std::fs::remove_file(&wal_path);
+
+        let temp_dir = TempDir::new().unwrap();
+        let config = make_write_back_config(
+            temp_dir.path().to_str().unwrap(),
+            mount_path,
+            "24h",
+        );
+
+        {
+            let vfs = Vfs::from_config(config.clone()).await.unwrap();
+            vfs.write("/wb_recover_test/file.txt", b"recover me")
+                .await
+                .unwrap();
+            // Intentionally drop without flush to simulate abrupt process end.
+        }
+
+        let recovered_vfs = Vfs::from_config(config).await.unwrap();
+        let recovered = std::fs::read(temp_dir.path().join("file.txt")).unwrap();
+        assert_eq!(recovered, b"recover me");
+
+        // Ensure the recovered instance stays usable.
+        recovered_vfs
+            .write("/wb_recover_test/other.txt", b"ok")
+            .await
+            .unwrap();
     }
 }

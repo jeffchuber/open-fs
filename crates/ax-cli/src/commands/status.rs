@@ -1,7 +1,17 @@
 use ax_remote::Vfs;
 
+fn sync_mode_label(mode: ax_remote::SyncMode) -> &'static str {
+    match mode {
+        ax_remote::SyncMode::None => "none",
+        ax_remote::SyncMode::WriteThrough => "write-through",
+        ax_remote::SyncMode::WriteBack => "write-back",
+        ax_remote::SyncMode::PullMirror => "pull-mirror",
+    }
+}
+
 pub async fn run(vfs: &Vfs) -> Result<(), Box<dyn std::error::Error>> {
     let config = vfs.effective_config();
+    let sync_statuses = vfs.sync_statuses().await?;
 
     println!("AX Status");
     println!("=========");
@@ -58,8 +68,32 @@ pub async fn run(vfs: &Vfs) -> Result<(), Box<dyn std::error::Error>> {
     }
     println!();
 
-    // Cache/Sync would go here if we had access to those stats
-    // For now, just show basic info
+    println!("Sync:");
+    for status in sync_statuses {
+        println!(
+            "  {} -> {} (mode: {}, read_only: {})",
+            status.mount_path,
+            status.backend_name,
+            sync_mode_label(status.sync_mode),
+            status.read_only
+        );
+        println!(
+            "    pending: {}, synced: {}, failed: {}, retries: {}",
+            status.pending, status.synced, status.failed, status.retries
+        );
+        if let (Some(pending), Some(processing), Some(failed), Some(unapplied)) = (
+            status.outbox_pending,
+            status.outbox_processing,
+            status.outbox_failed,
+            status.outbox_wal_unapplied,
+        ) {
+            println!(
+                "    outbox: pending {}, processing {}, failed {}, wal_unapplied {}",
+                pending, processing, failed, unapplied
+            );
+        }
+    }
+    println!();
 
     println!("Status: OK");
 

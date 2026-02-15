@@ -173,6 +173,11 @@ enum Commands {
         #[arg(long)]
         debounce: Option<u64>,
     },
+    /// Manage sync behavior for write-back mounts
+    Sync {
+        #[command(subcommand)]
+        action: SyncAction,
+    },
     /// Generate tool definitions for AI agents
     Tools {
         /// Output format (json, mcp, openai)
@@ -232,6 +237,14 @@ enum WalAction {
         #[arg(long)]
         dir: Option<PathBuf>,
     },
+}
+
+#[derive(Subcommand)]
+enum SyncAction {
+    /// Show sync and durable outbox status per mount
+    Status,
+    /// Flush write-back queues and replay durable outbox entries
+    Flush,
 }
 
 fn find_config() -> Option<PathBuf> {
@@ -301,6 +314,7 @@ async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
     let vfs = Vfs::from_config(config).await?;
 
     // Execute command
+    let mut should_flush = false;
     match cli.command {
         Commands::Ls { path } => {
             commands::ls::run(&vfs, path).await?;
@@ -310,12 +324,15 @@ async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
         }
         Commands::Write { path, content } => {
             commands::write::run(&vfs, &path, content).await?;
+            should_flush = true;
         }
         Commands::Append { path, content } => {
             commands::append::run(&vfs, &path, content).await?;
+            should_flush = true;
         }
         Commands::Rm { path } => {
             commands::rm::run(&vfs, &path).await?;
+            should_flush = true;
         }
         Commands::Stat { path } => {
             commands::stat::run(&vfs, &path).await?;
@@ -325,9 +342,11 @@ async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
         }
         Commands::Cp { src, dst } => {
             commands::cp::run(&vfs, &src, &dst).await?;
+            should_flush = true;
         }
         Commands::Mv { src, dst } => {
             commands::mv::run(&vfs, &src, &dst).await?;
+            should_flush = true;
         }
         Commands::Tree { path, depth } => {
             commands::tree::run(&vfs, path, depth).await?;
@@ -404,6 +423,14 @@ async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
         } => {
             commands::watch::run(&vfs, path, interval, poll, auto_index, webhook, debounce).await?;
         }
+        Commands::Sync { action } => match action {
+            SyncAction::Status => {
+                commands::sync::run_status(&vfs).await?;
+            }
+            SyncAction::Flush => {
+                commands::sync::run_flush(&vfs).await?;
+            }
+        },
         Commands::Tools { format, pretty } => {
             commands::tools::run(&vfs, format, pretty).await?;
         }
@@ -411,9 +438,7 @@ async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
             mountpoint,
             foreground,
         } => {
-            // Mount doesn't need the VFS, it creates its own
-            // We need to re-load config for the mount command
-            drop(vfs); // Drop the existing VFS
+            // Mount doesn't use the already-created VFS instance; it creates its own.
             let config = VfsConfig::from_file(&config_path)?;
             let args = commands::mount::MountArgs {
                 mountpoint,
@@ -437,6 +462,10 @@ async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
         Commands::Validate | Commands::Migrate | Commands::Wal { .. } => {
             return Err("Internal error: command should have been handled earlier".into());
         }
+    }
+
+    if should_flush {
+        vfs.flush_write_back().await?;
     }
 
     Ok(())

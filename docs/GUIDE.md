@@ -110,6 +110,15 @@ Run the MCP server over stdio:
 ax mcp
 ```
 
+## Sync Control
+
+For write-back mounts:
+
+```bash
+ax sync status
+ax sync flush
+```
+
 ## FUSE
 
 ```bash

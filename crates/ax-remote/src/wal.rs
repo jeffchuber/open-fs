@@ -480,6 +480,24 @@ impl WriteAheadLog {
         Ok(())
     }
 
+    /// Remove all non-failed outbox entries for a path.
+    ///
+    /// This is used by the in-memory write-back flush path to clear durable
+    /// outbox entries once a write has been successfully applied remotely.
+    pub fn complete_outbox_for_path(&self, path: &str) -> Result<usize, String> {
+        let conn = self.conn.lock().map_err(|e| format!("Lock error: {}", e))?;
+        let count = conn
+            .execute(
+                "DELETE FROM outbox WHERE path = ?1 AND status != 'failed'",
+                params![path],
+            )
+            .map_err(|e| format!("Failed to complete outbox path '{}': {}", path, e))?;
+        if count > 0 {
+            debug!("Outbox completed for path {} ({} entries)", path, count);
+        }
+        Ok(count)
+    }
+
     /// Record a failure for an outbox entry. Moves to failed if max retries exceeded.
     pub fn fail_outbox(&self, entry_id: i64, error: &str) -> Result<(), String> {
         let conn = self.conn.lock().map_err(|e| format!("Lock error: {}", e))?;
@@ -759,6 +777,22 @@ mod tests {
 
         let ready = wal.fetch_ready_outbox(10).unwrap();
         assert_eq!(ready.len(), 0);
+    }
+
+    #[test]
+    fn test_complete_outbox_for_path() {
+        let wal = make_wal();
+        wal.enqueue_outbox(WalOpType::Write, "/same.txt", Some(b"v1"), "/")
+            .unwrap();
+        wal.enqueue_outbox(WalOpType::Write, "/other.txt", Some(b"v2"), "/")
+            .unwrap();
+
+        let removed = wal.complete_outbox_for_path("/same.txt").unwrap();
+        assert_eq!(removed, 1);
+
+        let ready = wal.fetch_ready_outbox(10).unwrap();
+        assert_eq!(ready.len(), 1);
+        assert_eq!(ready[0].path, "/other.txt");
     }
 
     #[test]

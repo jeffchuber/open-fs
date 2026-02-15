@@ -5,6 +5,7 @@ use async_trait::async_trait;
 use ax_core::{Backend, BackendError, CacheConfig, CacheStats, Entry, LruCache, VfsError};
 
 use crate::sync::{SyncConfig, SyncEngine, SyncMode, SyncStats};
+use crate::wal::WriteAheadLog;
 
 /// A backend wrapper that adds caching and sync capabilities.
 pub struct CachedBackend<B: Backend> {
@@ -30,6 +31,22 @@ impl<B: Backend> CachedBackend<B> {
             inner: Arc::new(inner),
             cache: Arc::new(LruCache::new(cache_config)),
             sync: Arc::new(SyncEngine::new(sync_config)),
+            read_only,
+        }
+    }
+
+    /// Create a new cached backend with WAL-backed sync durability.
+    pub fn new_with_wal(
+        inner: B,
+        cache_config: CacheConfig,
+        sync_config: SyncConfig,
+        read_only: bool,
+        wal: Arc<WriteAheadLog>,
+    ) -> Self {
+        CachedBackend {
+            inner: Arc::new(inner),
+            cache: Arc::new(LruCache::new(cache_config)),
+            sync: Arc::new(SyncEngine::with_wal(sync_config, wal)),
             read_only,
         }
     }
@@ -118,6 +135,11 @@ impl<B: Backend> CachedBackend<B> {
     /// Shutdown the sync engine, flushing any pending writes.
     pub async fn shutdown_sync(&self) {
         self.sync.shutdown().await;
+    }
+
+    /// Get the mounted WAL instance, if write durability is enabled.
+    pub fn wal(&self) -> Option<Arc<WriteAheadLog>> {
+        self.sync.wal().cloned()
     }
 
     /// Get a reference to the inner backend.

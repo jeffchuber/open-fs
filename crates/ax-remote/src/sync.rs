@@ -184,6 +184,7 @@ impl SyncEngine {
         let in_flight = Arc::clone(&self.in_flight);
         let in_flight_notify = Arc::clone(&self.in_flight_notify);
         let flush_fn = Arc::new(flush_fn);
+        let wal = self.wal.clone();
 
         let handle = tokio::spawn(async move {
             let mut interval = tokio::time::interval(config.flush_interval);
@@ -200,6 +201,7 @@ impl SyncEngine {
                     &tombstones,
                     &stats,
                     &config,
+                    wal.as_ref(),
                     &flush_fn,
                     &in_flight,
                     &in_flight_notify,
@@ -214,6 +216,7 @@ impl SyncEngine {
                 &tombstones,
                 &stats,
                 &config,
+                wal.as_ref(),
                 &flush_fn,
                 &in_flight,
                 &in_flight_notify,
@@ -546,6 +549,7 @@ async fn flush_pending<F, Fut>(
     tombstones: &Arc<RwLock<HashMap<String, u64>>>,
     stats: &Arc<RwLock<SyncStats>>,
     config: &SyncConfig,
+    wal: Option<&Arc<WriteAheadLog>>,
     flush_fn: &Arc<F>,
     in_flight: &Arc<Mutex<HashSet<String>>>,
     in_flight_notify: &Arc<Notify>,
@@ -597,6 +601,16 @@ async fn flush_pending<F, Fut>(
                 stats_guard.synced += 1;
                 stats_guard.last_sync = Some(Instant::now());
                 debug!("Synced: {}", write.path);
+                drop(stats_guard);
+
+                if let Some(wal) = wal {
+                    if let Err(e) = wal.complete_outbox_for_path(&write.path) {
+                        warn!(
+                            "Failed to clear durable outbox for {} after flush: {}",
+                            write.path, e
+                        );
+                    }
+                }
             }
             Err(e) => {
                 let is_transient = is_transient_error(&e);
