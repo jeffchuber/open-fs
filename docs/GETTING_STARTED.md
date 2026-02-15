@@ -14,9 +14,15 @@ cargo install --path crates/ax-cli
 Optional backend features:
 
 ```bash
-cargo install --path crates/ax-cli --features s3
-cargo install --path crates/ax-cli --features postgres
-cargo install --path crates/ax-cli --features all-backends
+cargo install --path crates/ax-cli --features ax-remote/s3
+cargo install --path crates/ax-cli --features ax-remote/postgres
+cargo install --path crates/ax-cli --features ax-remote/all-backends
+```
+
+FUSE command support:
+
+```bash
+cargo install --path crates/ax-cli --features fuse
 ```
 
 ## Create a config
@@ -92,7 +98,7 @@ ax mcp
 ## FUSE mount (macOS/Linux)
 
 ```bash
-ax mount ~/ax-mount --config ax.yaml
+ax --config ax.yaml mount ~/ax-mount
 ls ~/ax-mount/files
 ax unmount ~/ax-mount
 ```

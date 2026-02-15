@@ -10,7 +10,7 @@ Use AX through either:
 2. Mount AX:
 
 ```bash
-ax mount ~/ax-mount --config ax.yaml
+ax --config ax.yaml mount ~/ax-mount
 ```
 
 3. Run Claude Code against the mount:

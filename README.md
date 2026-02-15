@@ -39,14 +39,17 @@ cargo install --path crates/ax-cli
 ### Optional backend features
 
 ```bash
-# S3 support
-cargo build --release --features s3
+# S3 backend support in ax-cli
+cargo install --path crates/ax-cli --features ax-remote/s3
 
-# PostgreSQL support
-cargo build --release --features postgres
+# PostgreSQL backend support in ax-cli
+cargo install --path crates/ax-cli --features ax-remote/postgres
 
-# all optional backends in workspace crates
-cargo build --release --features all-backends
+# all optional remote backends in ax-cli
+cargo install --path crates/ax-cli --features ax-remote/all-backends
+
+# FUSE mount command support
+cargo install --path crates/ax-cli --features fuse
 ```
 
 ## Quick Start
@@ -110,8 +113,8 @@ ax grep "Hello" /workspace --recursive
 Supported backend types:
 - `fs`
 - `memory`
-- `s3` (feature `s3`)
-- `postgres` (feature `postgres`)
+- `s3` (build `ax-cli` with feature `ax-remote/s3`)
+- `postgres` (build `ax-cli` with feature `ax-remote/postgres`)
 - `chroma`
 
 Example S3 backend:
@@ -153,7 +156,7 @@ ax mcp
 ## FUSE (macOS/Linux)
 
 ```bash
-ax mount ~/ax-mount --config ax.yaml
+ax --config ax.yaml mount ~/ax-mount
 ax unmount ~/ax-mount
 ```
 

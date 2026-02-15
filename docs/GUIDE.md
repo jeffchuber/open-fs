@@ -45,13 +45,32 @@ ax index /workspace
 ax search "where is greeting logic" --limit 10
 ```
 
+## Watch config
+
+`ax watch` supports defaults from config (`defaults.watch` or `mounts[].watch`):
+
+```yaml
+defaults:
+  watch:
+    native: true
+    poll_interval: 2s
+    debounce: 500ms
+    auto_index: true
+    include:
+      - "^/workspace/.*\\.rs$"
+    exclude:
+      - "/target/"
+```
+
+CLI flags still override config values.
+
 ## Backends
 
 Supported backend types:
 - `fs`
 - `memory`
-- `s3`
-- `postgres`
+- `s3` (build `ax-cli` with `--features ax-remote/s3`)
+- `postgres` (build `ax-cli` with `--features ax-remote/postgres`)
 - `chroma`
 
 Example mixed configuration:
@@ -94,7 +113,7 @@ ax mcp
 ## FUSE
 
 ```bash
-ax mount ~/ax-mount --config ax.yaml
+ax --config ax.yaml mount ~/ax-mount
 ax unmount ~/ax-mount
 ```
 

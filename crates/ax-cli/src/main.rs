@@ -157,9 +157,9 @@ enum Commands {
     Watch {
         /// Path to watch (defaults to /)
         path: Option<String>,
-        /// Polling interval in seconds
-        #[arg(short, long, default_value = "2")]
-        interval: u64,
+        /// Polling interval in seconds (defaults to config or 2s)
+        #[arg(short, long)]
+        interval: Option<u64>,
         /// Use polling mode instead of native notifications
         #[arg(long)]
         poll: bool,
@@ -169,9 +169,9 @@ enum Commands {
         /// Webhook URL to POST change notifications to
         #[arg(long)]
         webhook: Option<String>,
-        /// Debounce interval in milliseconds
-        #[arg(long, default_value = "500")]
-        debounce: u64,
+        /// Debounce interval in milliseconds (defaults to config or 500ms)
+        #[arg(long)]
+        debounce: Option<u64>,
     },
     /// Generate tool definitions for AI agents
     Tools {
@@ -262,9 +262,10 @@ fn find_config() -> Option<PathBuf> {
 
 async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
     // Find config file
-    let config_path = cli.config.or_else(find_config).ok_or(
-        "No configuration file found. Use --config, set AX_CONFIG, or create ax.yaml",
-    )?;
+    let config_path = cli
+        .config
+        .or_else(find_config)
+        .ok_or("No configuration file found. Use --config, set AX_CONFIG, or create ax.yaml")?;
 
     // Commands that don't need a VFS (or create their own)
     match &cli.command {
@@ -280,10 +281,14 @@ async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
         Commands::Mcp => {
             return commands::mcp::run(&config_path).await;
         }
-        Commands::Wal { action: WalAction::Checkpoint { dir } } => {
+        Commands::Wal {
+            action: WalAction::Checkpoint { dir },
+        } => {
             return commands::wal::run_checkpoint(dir.clone()).await;
         }
-        Commands::Wal { action: WalAction::Status { dir } } => {
+        Commands::Wal {
+            action: WalAction::Status { dir },
+        } => {
             return commands::wal::run_status(dir.clone()).await;
         }
         _ => {}
@@ -354,7 +359,18 @@ async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
             incremental,
             force,
         } => {
-            commands::index::run(&vfs, path, chroma_endpoint, collection, recursive, chunker, chunk_size, incremental, force).await?;
+            commands::index::run(
+                &vfs,
+                path,
+                chroma_endpoint,
+                collection,
+                recursive,
+                chunker,
+                chunk_size,
+                incremental,
+                force,
+            )
+            .await?;
         }
         Commands::Search {
             query,
@@ -364,18 +380,37 @@ async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
             mode,
             context,
         } => {
-            commands::search::run(&vfs, &query, chroma_endpoint, collection, limit, mode, context).await?;
+            commands::search::run(
+                &vfs,
+                &query,
+                chroma_endpoint,
+                collection,
+                limit,
+                mode,
+                context,
+            )
+            .await?;
         }
         Commands::Status => {
             commands::status::run(&vfs).await?;
         }
-        Commands::Watch { path, interval, poll, auto_index, webhook, debounce } => {
+        Commands::Watch {
+            path,
+            interval,
+            poll,
+            auto_index,
+            webhook,
+            debounce,
+        } => {
             commands::watch::run(&vfs, path, interval, poll, auto_index, webhook, debounce).await?;
         }
         Commands::Tools { format, pretty } => {
             commands::tools::run(&vfs, format, pretty).await?;
         }
-        Commands::Mount { mountpoint, foreground } => {
+        Commands::Mount {
+            mountpoint,
+            foreground,
+        } => {
             // Mount doesn't need the VFS, it creates its own
             // We need to re-load config for the mount command
             drop(vfs); // Drop the existing VFS
@@ -387,10 +422,7 @@ async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
             commands::mount::run(config, args)?;
         }
         Commands::Unmount { mountpoint, force } => {
-            let args = commands::unmount::UnmountArgs {
-                mountpoint,
-                force,
-            };
+            let args = commands::unmount::UnmountArgs { mountpoint, force };
             commands::unmount::run(args)?;
         }
         Commands::IndexStatus { state_file } => {

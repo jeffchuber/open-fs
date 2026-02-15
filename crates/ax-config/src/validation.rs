@@ -245,6 +245,22 @@ fn validate_watch_config(context: &str, watch: &WatchConfig, errors: &mut Vec<Co
             )));
         }
     }
+    for pattern in &watch.include {
+        if let Err(err) = regex::Regex::new(pattern) {
+            errors.push(ConfigError::InvalidConfig(format!(
+                "{}.watch.include: invalid regex '{}': {}",
+                context, pattern, err
+            )));
+        }
+    }
+    for pattern in &watch.exclude {
+        if let Err(err) = regex::Regex::new(pattern) {
+            errors.push(ConfigError::InvalidConfig(format!(
+                "{}.watch.exclude: invalid regex '{}': {}",
+                context, pattern, err
+            )));
+        }
+    }
 }
 
 /// Normalize a path by removing trailing slashes.
@@ -715,6 +731,58 @@ mod tests {
         assert!(errors.iter().any(|e| e
             .to_string()
             .contains("watch.webhook_url: must start with http")));
+    }
+
+    #[test]
+    fn test_validate_watch_bad_include_regex() {
+        let config = VfsConfig {
+            backends: indexmap::indexmap! {
+                "local".to_string() => BackendConfig::Fs(FsBackendConfig {
+                    root: "./data".to_string(),
+                }),
+            },
+            mounts: vec![MountConfig {
+                path: "/workspace".to_string(),
+                backend: Some("local".to_string()),
+                watch: Some(WatchConfig {
+                    include: vec!["(".to_string()],
+                    ..Default::default()
+                }),
+                ..default_mount()
+            }],
+            ..Default::default()
+        };
+
+        let errors = config.validate();
+        assert!(errors
+            .iter()
+            .any(|e| e.to_string().contains("watch.include: invalid regex")));
+    }
+
+    #[test]
+    fn test_validate_watch_bad_exclude_regex() {
+        let config = VfsConfig {
+            backends: indexmap::indexmap! {
+                "local".to_string() => BackendConfig::Fs(FsBackendConfig {
+                    root: "./data".to_string(),
+                }),
+            },
+            mounts: vec![MountConfig {
+                path: "/workspace".to_string(),
+                backend: Some("local".to_string()),
+                watch: Some(WatchConfig {
+                    exclude: vec!["[".to_string()],
+                    ..Default::default()
+                }),
+                ..default_mount()
+            }],
+            ..Default::default()
+        };
+
+        let errors = config.validate();
+        assert!(errors
+            .iter()
+            .any(|e| e.to_string().contains("watch.exclude: invalid regex")));
     }
 
     fn default_mount() -> MountConfig {
