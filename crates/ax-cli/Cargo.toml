@@ -23,7 +23,6 @@ ax-local = { path = "../ax-local" }
 ax-remote = { path = "../ax-remote" }
 ax-fuse = { path = "../ax-fuse", optional = true }
 ax-mcp = { path = "../ax-mcp" }
-ax-server = { path = "../ax-server" }
 clap = { version = "4", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
 dirs-next = "2"

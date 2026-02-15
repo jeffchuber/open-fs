@@ -113,8 +113,8 @@ pub enum ConflictStrategy {
     Lock,
     /// Create forked versions
     Fork,
-    /// Attempt to merge changes
-    Merge,
+    /// Attempt to reconcile changes
+    Reconcile,
 }
 
 /// Cache invalidation strategy.

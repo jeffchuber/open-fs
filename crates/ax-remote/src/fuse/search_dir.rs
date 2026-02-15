@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use parking_lot::RwLock;
 
-use crate::inode::{InodeAttr, InodeKind, InodeTable, VIRTUAL_INO_BASE};
+use super::inode::{InodeAttr, InodeKind, InodeTable, VIRTUAL_INO_BASE};
 
 /// Virtual path prefix for the search directory.
 pub const SEARCH_DIR_PATH: &str = "/.search";

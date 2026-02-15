@@ -8,14 +8,14 @@
       "description": "Show working tree status"
     },
     {
-      "name": "diff",
-      "command": "git diff",
-      "description": "Show changes in working directory"
+      "name": "changes",
+      "command": "git show --stat",
+      "description": "Show recent commit changes"
     },
     {
-      "name": "diff_staged",
-      "command": "git diff --staged",
-      "description": "Show staged changes"
+      "name": "staged_changes",
+      "command": "git status --short",
+      "description": "Show staged and unstaged file states"
     },
     {
       "name": "log",
@@ -49,16 +49,16 @@
       "description": "Pull changes from remote"
     },
     {
-      "name": "branch",
-      "command": "git branch",
-      "description": "List branches"
+      "name": "heads",
+      "command": "git show-ref --heads",
+      "description": "List local head refs"
     },
     {
-      "name": "checkout",
-      "command": "git checkout {branch}",
-      "description": "Switch to branch",
+      "name": "switch",
+      "command": "git switch {topic}",
+      "description": "Switch to topic",
       "parameters": {
-        "branch": "Branch name or -b new_branch to create"
+        "topic": "Target topic name"
       }
     },
     {

@@ -1,0 +1,10 @@
+/Users/jeff/src/demos/blah/ax/crates/ax-backends/target/debug/deps/aws_smithy_json-8b94f8f5d385925e.d: /Users/jeff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/aws-smithy-json-0.62.4/src/lib.rs /Users/jeff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/aws-smithy-json-0.62.4/src/deserialize.rs /Users/jeff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/aws-smithy-json-0.62.4/src/deserialize/error.rs /Users/jeff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/aws-smithy-json-0.62.4/src/deserialize/token.rs /Users/jeff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/aws-smithy-json-0.62.4/src/escape.rs /Users/jeff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/aws-smithy-json-0.62.4/src/serialize.rs
+
+/Users/jeff/src/demos/blah/ax/crates/ax-backends/target/debug/deps/libaws_smithy_json-8b94f8f5d385925e.rmeta: /Users/jeff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/aws-smithy-json-0.62.4/src/lib.rs /Users/jeff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/aws-smithy-json-0.62.4/src/deserialize.rs /Users/jeff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/aws-smithy-json-0.62.4/src/deserialize/error.rs /Users/jeff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/aws-smithy-json-0.62.4/src/deserialize/token.rs /Users/jeff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/aws-smithy-json-0.62.4/src/escape.rs /Users/jeff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/aws-smithy-json-0.62.4/src/serialize.rs
+
+/Users/jeff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/aws-smithy-json-0.62.4/src/lib.rs:
+/Users/jeff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/aws-smithy-json-0.62.4/src/deserialize.rs:
+/Users/jeff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/aws-smithy-json-0.62.4/src/deserialize/error.rs:
+/Users/jeff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/aws-smithy-json-0.62.4/src/deserialize/token.rs:
+/Users/jeff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/aws-smithy-json-0.62.4/src/escape.rs:
+/Users/jeff/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/aws-smithy-json-0.62.4/src/serialize.rs:

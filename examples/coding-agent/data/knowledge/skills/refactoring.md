@@ -116,4 +116,4 @@ if retry_count > MAX_RETRIES:
 2. **Small steps** - One change at a time, run tests between
 3. **Version control** - Commit frequently, easy to revert
 4. **No behavior change** - Refactoring doesn't change functionality
-5. **Review the diff** - Ensure changes are intentional
+5. **Review the changeset** - Ensure changes are intentional

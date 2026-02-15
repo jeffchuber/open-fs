@@ -84,7 +84,7 @@ impl SemanticChunker {
         sections
     }
 
-    /// Merge small sections together.
+    /// Combine small sections together.
     fn merge_small_sections(&self, sections: Vec<(usize, usize, String)>) -> Vec<(usize, usize, String)> {
         let mut merged = Vec::new();
         let mut current: Option<(usize, usize, String)> = None;
@@ -95,7 +95,7 @@ impl SemanticChunker {
                     let combined_len = curr_content.len() + content.len() + 2; // +2 for potential separator
 
                     if combined_len <= self.config.chunk_size {
-                        // Merge sections
+                        // Combine sections
                         current = Some((curr_start, end, format!("{}\n\n{}", curr_content, content)));
                     } else {
                         // Save current and start new
@@ -115,7 +115,7 @@ impl SemanticChunker {
             if content.len() >= self.config.min_chunk_size || merged.is_empty() {
                 merged.push((start, end, content));
             } else if let Some(last) = merged.last_mut() {
-                // Merge into last chunk
+                // Combine into last chunk
                 last.1 = end;
                 last.2 = format!("{}\n\n{}", last.2, content);
             }

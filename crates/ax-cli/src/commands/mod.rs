@@ -37,7 +37,6 @@ pub mod mount {
 pub mod mv;
 pub mod rm;
 pub mod search;
-pub mod serve;
 pub mod stat;
 pub mod status;
 pub mod tools;

@@ -7,20 +7,11 @@ members = [
     "crates/ax-remote",
     "crates/ax-fuse",
     "crates/ax-mcp",
-    "crates/ax-server",
     "crates/ax-cli",
     "crates/ax-sim",
 ]
 
-# ax-ffi is excluded from default workspace build
-# It requires Python development headers and should be built with:
-#   cd crates/ax-ffi && maturin develop
-# or:
-#   cd crates/ax-ffi && maturin build --release
-#
-# ax-js is excluded as it requires napi-cli and Node.js headers
-# Build with: cd crates/ax-js && npm install && npm run build
-exclude = ["crates/ax-ffi", "crates/ax-js", "crates/ax-backends", "crates/ax-indexing"]
+exclude = ["crates/ax-backends"]
 
 [workspace.package]
 version = "0.3.0"

@@ -7,6 +7,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use ax_config::VfsConfig;
+use crate::{grep, GrepOptions};
 use crate::vfs::Vfs;
 use tracing::info;
 
@@ -67,12 +68,12 @@ impl AxFsCore {
 
         let vfs = self.vfs.clone();
         let grep_result = block_on(async {
-            let opts = ax_remote::GrepOptions {
+            let opts = GrepOptions {
                 recursive: true,
                 max_matches: 200,
                 max_depth: 20,
             };
-            ax_remote::grep(&vfs, &query, "/", &opts).await
+            grep(&vfs, &query, "/", &opts).await
         })?;
 
         let tuples: Vec<(String, String, f32, usize, usize)> = match grep_result {

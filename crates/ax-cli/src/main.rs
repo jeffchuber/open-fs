@@ -214,18 +214,6 @@ enum Commands {
     Migrate,
     /// Run as an MCP (Model Context Protocol) server over stdio
     Mcp,
-    /// Start the AX REST API server
-    Serve {
-        /// Host to bind to
-        #[arg(long, default_value = "127.0.0.1")]
-        host: String,
-        /// Port to bind to
-        #[arg(short, long, default_value = "19557")]
-        port: u16,
-        /// API key for authentication (optional)
-        #[arg(long)]
-        api_key: Option<String>,
-    },
     /// Manage the Write-Ahead Log (WAL)
     Wal {
         #[command(subcommand)]
@@ -415,10 +403,7 @@ async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
         Commands::Mcp => {
             commands::mcp::run(&config_path).await?;
         }
-        Commands::Serve { host, port, api_key } => {
-            commands::serve::run(vfs, &host, port, api_key).await?;
-        }
-        // These are handled above before VFS creation; this branch is logically
+        // These are handled above before VFS creation; this path is logically
         // unreachable due to the early return, but we return an error instead of
         // panicking if it's ever reached due to a code change.
         Commands::Validate | Commands::Migrate | Commands::Wal { .. } => {

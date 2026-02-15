@@ -10,7 +10,7 @@
 ### 2. Gather Information
 - Read error messages carefully
 - Check logs (application, system, database)
-- Review recent changes (git diff, git log)
+- Review recent changes (git show, git log)
 - Check related issues/PRs
 
 ### 3. Form Hypotheses
@@ -70,7 +70,7 @@ git bisect bad HEAD
 git bisect good v1.0.0
 
 # See what changed
-git diff HEAD~5..HEAD -- path/to/file.py
+git log -p HEAD~5..HEAD -- path/to/file.py
 
 # Blame specific lines
 git blame -L 50,60 file.py
