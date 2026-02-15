@@ -2,7 +2,6 @@ use std::collections::HashSet;
 
 use crate::types::{
     BackendConfig, ChunkConfig, EmbeddingConfig, VfsConfig, WatchConfig,
-    WebDavBackendConfig, SftpBackendConfig, GcsBackendConfig, AzureBlobBackendConfig,
 };
 use crate::ConfigError;
 
@@ -77,10 +76,6 @@ impl VfsConfig {
                 BackendConfig::Postgres(pg) => validate_postgres_config(name, pg, &mut errors),
                 BackendConfig::Chroma(chroma) => validate_chroma_config(name, chroma, &mut errors),
                 BackendConfig::Api(api) => validate_api_config(name, api, &mut errors),
-                BackendConfig::WebDav(webdav) => validate_webdav_config(name, webdav, &mut errors),
-                BackendConfig::Sftp(sftp) => validate_sftp_config(name, sftp, &mut errors),
-                BackendConfig::Gcs(gcs) => validate_gcs_config(name, gcs, &mut errors),
-                BackendConfig::AzureBlob(azure) => validate_azure_config(name, azure, &mut errors),
             }
         }
 
@@ -208,81 +203,6 @@ fn validate_api_config(
         errors.push(ConfigError::InvalidConfig(format!(
             "backends.{}.base_url: must start with http:// or https:// (got '{}')",
             name, api.base_url
-        )));
-    }
-}
-
-fn validate_webdav_config(
-    name: &str,
-    webdav: &WebDavBackendConfig,
-    errors: &mut Vec<ConfigError>,
-) {
-    if webdav.url.is_empty() {
-        errors.push(ConfigError::InvalidConfig(format!(
-            "backends.{}.url: must not be empty",
-            name
-        )));
-    } else if !webdav.url.starts_with("http://") && !webdav.url.starts_with("https://") {
-        errors.push(ConfigError::InvalidConfig(format!(
-            "backends.{}.url: must start with http:// or https:// (got '{}')",
-            name, webdav.url
-        )));
-    }
-}
-
-fn validate_sftp_config(
-    name: &str,
-    sftp: &SftpBackendConfig,
-    errors: &mut Vec<ConfigError>,
-) {
-    if sftp.host.is_empty() {
-        errors.push(ConfigError::InvalidConfig(format!(
-            "backends.{}.host: must not be empty",
-            name
-        )));
-    }
-    if sftp.username.is_empty() {
-        errors.push(ConfigError::InvalidConfig(format!(
-            "backends.{}.username: must not be empty",
-            name
-        )));
-    }
-    if sftp.port == 0 {
-        errors.push(ConfigError::InvalidConfig(format!(
-            "backends.{}.port: must be greater than 0",
-            name
-        )));
-    }
-}
-
-fn validate_gcs_config(
-    name: &str,
-    gcs: &GcsBackendConfig,
-    errors: &mut Vec<ConfigError>,
-) {
-    if gcs.bucket.is_empty() {
-        errors.push(ConfigError::InvalidConfig(format!(
-            "backends.{}.bucket: must not be empty",
-            name
-        )));
-    }
-}
-
-fn validate_azure_config(
-    name: &str,
-    azure: &AzureBlobBackendConfig,
-    errors: &mut Vec<ConfigError>,
-) {
-    if azure.container.is_empty() {
-        errors.push(ConfigError::InvalidConfig(format!(
-            "backends.{}.container: must not be empty",
-            name
-        )));
-    }
-    if azure.account.is_empty() {
-        errors.push(ConfigError::InvalidConfig(format!(
-            "backends.{}.account: must not be empty",
-            name
         )));
     }
 }

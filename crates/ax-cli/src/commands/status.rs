@@ -24,10 +24,6 @@ pub async fn run(vfs: &Vfs) -> Result<(), Box<dyn std::error::Error>> {
             ax_config::BackendConfig::S3(_) => "s3",
             ax_config::BackendConfig::Postgres(_) => "postgres",
             ax_config::BackendConfig::Api(_) => "api",
-            ax_config::BackendConfig::WebDav(_) => "webdav",
-            ax_config::BackendConfig::Sftp(_) => "sftp",
-            ax_config::BackendConfig::Gcs(_) => "gcs",
-            ax_config::BackendConfig::AzureBlob(_) => "azure_blob",
             _ => "unknown",
         };
         println!("  {} ({})", name, backend_type);

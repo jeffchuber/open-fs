@@ -1,6 +1,6 @@
 # AX Project Overview
 
-AX (Agentic Files) is a virtual filesystem that gives AI agents and automation a single, consistent interface to files — regardless of where those files actually live. Local disk, S3, PostgreSQL, WebDAV, SFTP, GCS, Azure Blob, or an in-memory store: AX mounts them all into one unified file tree and provides read, write, search, and management operations across all of them.
+AX (Agentic Files) is a virtual filesystem that gives AI agents and automation a single, consistent interface to files — regardless of where those files actually live. Local disk, S3, PostgreSQL, Chroma, or an in-memory store: AX mounts them into one unified file tree and provides read, write, search, and management operations across all of them.
 
 ## Why AX Exists
 
@@ -12,7 +12,7 @@ AX eliminates this fragmentation. An agent writes to `/workspace/notes.txt` and 
 
 ### Backends
 
-A backend is a storage system. AX supports nine:
+A backend is a storage system. AX supports five:
 
 | Backend | Type | Use Case |
 |---------|------|----------|
@@ -21,10 +21,6 @@ A backend is a storage system. AX supports nine:
 | S3 | `s3` | AWS, MinIO, R2, DigitalOcean Spaces |
 | PostgreSQL | `postgres` | Database-backed file storage |
 | Chroma | `chroma` | Vector database for semantic search |
-| WebDAV | `webdav` | Network file shares (NAS, Nextcloud) |
-| SFTP | `sftp` | SSH-based remote access |
-| Google Cloud Storage | `gcs` | GCP object storage |
-| Azure Blob Storage | `azure_blob` | Azure object storage |
 
 Each backend implements the same async trait: `read`, `write`, `append`, `delete`, `list`, `exists`, `stat`, `rename`.
 
@@ -148,7 +144,7 @@ ax-core            Cache, metrics, AI tool generation, ChromaStore wrapper
 ax-indexing        Text chunking, embeddings, BM25 sparse encoding
 ax-local           Incremental indexer, search engine, watch mode, work queue
 ax-remote          VFS router, cached backend, sync engine, WAL
-ax-fuse            FUSE filesystem (macOS/Linux via fuser, Windows stub via WinFsp)
+ax-fuse            FUSE filesystem (macOS/Linux via fuser)
 ax-mcp             MCP server (JSON-RPC 2.0, 7 tools)
 ax-server          REST API (Axum, 14 endpoints, Bearer auth, OpenAPI)
 ax-cli             CLI (27 subcommands via clap)
@@ -171,7 +167,7 @@ CachedBackend --- Cache (moka LRU, lock-free reads)
 SyncEngine --- WAL (SQLite, crash recovery)
     |
     v
-Backend (fs / s3 / postgres / webdav / sftp / gcs / azure / memory / chroma)
+Backend (fs / s3 / postgres / memory / chroma)
 ```
 
 ## Configuration
@@ -189,6 +185,6 @@ AX infers smart defaults from mount paths:
 **Tests**: 617 passing
 **License**: MIT
 
-All core features are complete and tested. Known limitations: Windows FUSE is stubbed (macOS/Linux work fully), vector search requires an external Chroma server, and the project has not undergone a security audit.
+All core features are complete and tested. Known limitations: FUSE targets macOS/Linux, vector search requires an external Chroma server, and the project has not undergone a security audit.
 
 See [PROJECT_STATUS.md](PROJECT_STATUS.md) for the full roadmap.

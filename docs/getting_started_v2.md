@@ -11,7 +11,7 @@ cargo build --release
 cargo install --path crates/ax-cli
 ```
 
-To enable all storage backends (S3, PostgreSQL, WebDAV, SFTP, GCS, Azure):
+To enable all optional storage backends (S3, PostgreSQL):
 
 ```bash
 cargo install --path crates/ax-cli --features all-backends
@@ -133,11 +133,6 @@ backends:
     type: s3
     bucket: my-bucket
     region: us-east-1
-  nas:
-    type: webdav
-    url: https://nas.local/dav
-    username: ${WEBDAV_USER}
-    password: ${WEBDAV_PASS}
 
 mounts:
   - path: /code
@@ -146,11 +141,6 @@ mounts:
     backend: s3
     sync:
       mode: write_through
-  - path: /shared
-    backend: nas
-    read_only: true
-    sync:
-      mode: pull_mirror
 ```
 
 Environment variables are interpolated with `${VAR_NAME}` syntax. See [project_overview.md](project_overview.md) for the full list of supported backends.

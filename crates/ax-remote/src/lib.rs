@@ -22,17 +22,5 @@ pub use backends::{S3Backend, S3Config};
 #[cfg(feature = "postgres")]
 pub use backends::{PostgresBackend, PostgresConfig};
 
-#[cfg(feature = "webdav")]
-pub use backends::{WebDavBackend, WebDavConfig};
-
-#[cfg(feature = "sftp")]
-pub use backends::{SftpBackend, SftpConfig};
-
-#[cfg(feature = "gcs")]
-pub use backends::{GcsBackend, GcsConfig};
-
-#[cfg(feature = "azure")]
-pub use backends::{AzureBlobBackend, AzureBlobConfig};
-
 #[cfg(feature = "fuse")]
 pub mod fuse;

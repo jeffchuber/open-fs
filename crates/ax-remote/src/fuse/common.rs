@@ -1,7 +1,7 @@
 //! Platform-neutral FUSE core logic.
 //!
-//! This module contains the shared VFS-interaction code that is used by both
-//! the Unix (fuser) and Windows (winfsp) FUSE implementations.
+//! This module contains the shared VFS-interaction code for the Unix
+//! (`fuser`) FUSE implementation.
 
 use std::path::Path;
 use std::sync::Arc;
@@ -12,7 +12,7 @@ use tracing::info;
 
 use super::async_bridge::{block_on, init_runtime};
 use super::inode::{InodeAttr, InodeKind, InodeTable, ROOT_INO, VIRTUAL_INO_BASE};
-use super::search_dir::{SearchDir, SEARCH_DIR_PATH};
+use super::search_dir::{SearchDir, QUERY_DIR_PATH, SEARCH_DIR_PATH};
 
 /// Errors returned by filesystem operations.
 #[derive(Debug)]
@@ -59,6 +59,35 @@ pub struct AxFsCore {
 }
 
 impl AxFsCore {
+    fn materialize_query_results(&self, query_path: &str) -> Result<(), FsOpError> {
+        let query = SearchDir::extract_query(query_path).ok_or(FsOpError::NotFound)?;
+        if self.search_dir.has_query(&query) {
+            return Ok(());
+        }
+
+        let vfs = self.vfs.clone();
+        let grep_result = block_on(async {
+            let opts = ax_remote::GrepOptions {
+                recursive: true,
+                max_matches: 200,
+                max_depth: 20,
+            };
+            ax_remote::grep(&vfs, &query, "/", &opts).await
+        })?;
+
+        let tuples: Vec<(String, String, f32, usize, usize)> = match grep_result {
+            Ok(matches) => matches
+                .into_iter()
+                .map(|m| (m.path, m.line, 1.0, m.line_number, m.line_number))
+                .collect(),
+            Err(_) => Vec::new(),
+        };
+
+        let entries = self.search_dir.create_result_entries(&tuples);
+        self.search_dir.store_results(&query, entries);
+        Ok(())
+    }
+
     /// Create a new core from a config file.
     pub fn from_config_file(path: &Path) -> Result<Self, Box<dyn std::error::Error>> {
         let config = VfsConfig::from_file(path)?;
@@ -106,6 +135,12 @@ impl AxFsCore {
     pub fn do_lookup(&self, parent: u64, name: &str) -> Result<InodeAttr, FsOpError> {
         let parent_path = self.get_path(parent).ok_or(FsOpError::NotFound)?;
         let child_path = Self::child_path(&parent_path, name);
+
+        if SearchDir::is_query_dir(&parent_path) {
+            let _ = self.materialize_query_results(&child_path);
+        } else if SearchDir::is_query_path(&parent_path) {
+            let _ = self.materialize_query_results(&parent_path);
+        }
 
         // Check for virtual .search directory
         if SearchDir::is_search_path(&child_path) {
@@ -197,6 +232,22 @@ impl AxFsCore {
         let path = self.get_path(ino).ok_or(FsOpError::NotFound)?;
 
         if SearchDir::is_search_path(&path) {
+            if self.search_dir.read_file(&path).is_none()
+                && path.starts_with(&format!("{}/", QUERY_DIR_PATH))
+            {
+                if let Some((query_path, _)) = path.rsplit_once('/') {
+                    let _ = self.materialize_query_results(query_path);
+                }
+            }
+
+            if let Some(data) = self.search_dir.read_file(&path) {
+                let start = offset as usize;
+                if start >= data.len() {
+                    return Ok(Vec::new());
+                }
+                let end = (start + size as usize).min(data.len());
+                return Ok(data[start..end].to_vec());
+            }
             return Err(FsOpError::IsDir);
         }
 
@@ -266,6 +317,10 @@ impl AxFsCore {
     /// List a directory. Returns (ino, name, kind) tuples.
     pub fn do_readdir(&self, ino: u64) -> Result<ReadDirResult, FsOpError> {
         let path = self.get_path(ino).ok_or(FsOpError::NotFound)?;
+
+        if SearchDir::is_query_path(&path) {
+            let _ = self.materialize_query_results(&path);
+        }
 
         // Handle virtual .search directory
         if SearchDir::is_search_path(&path) {

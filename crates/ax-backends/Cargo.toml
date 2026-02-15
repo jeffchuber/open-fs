@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Storage backend implementations (fs, S3, Postgres, WebDAV, SFTP, GCS, Azure) for AX"
+description = "Storage backend implementations (fs, S3, Postgres, Chroma) for AX"
 
 [dependencies]
 ax-config = { path = "../ax-config" }
@@ -24,28 +24,11 @@ aws-config = { version = "1", optional = true }
 # Postgres backend (optional)
 sqlx = { version = "0.8", features = ["runtime-tokio", "postgres", "chrono"], optional = true }
 
-# WebDAV backend (optional)
-quick-xml = { version = "0.37", features = ["serialize"], optional = true }
-
-# SFTP backend (optional)
-russh = { version = "0.46", optional = true }
-russh-sftp = { version = "2.0.0-beta.5", optional = true }
-russh-keys = { version = "0.46", optional = true }
-
-# GCS backend (optional)
-urlencoding = { version = "2", optional = true }
-
-# Azure backend (optional) - uses quick-xml for XML parsing (shared with webdav)
-
 [features]
 default = []
 s3 = ["aws-sdk-s3", "aws-config"]
 postgres = ["sqlx"]
-webdav = ["quick-xml"]
-sftp = ["russh", "russh-sftp", "russh-keys"]
-gcs = ["urlencoding"]
-azure = ["quick-xml", "urlencoding"]
-all-backends = ["s3", "postgres", "webdav", "sftp", "gcs", "azure"]
+all-backends = ["s3", "postgres"]
 
 [dev-dependencies]
 tempfile = "3"

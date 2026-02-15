@@ -4,12 +4,12 @@ A virtual filesystem designed for AI agents and automation. AX provides a unifie
 
 ## Features
 
-- **9 Storage Backends**: Local filesystem, memory, S3-compatible, PostgreSQL, Chroma vector DB, WebDAV, SFTP, Google Cloud Storage, Azure Blob Storage
+- **5 Storage Backends**: Local filesystem, memory, S3-compatible, PostgreSQL, Chroma vector DB
 - **Mount-based Routing**: Unix-like mount points for organizing different backends
 - **Caching**: Lock-free LRU cache (moka) with TTL support
 - **Sync Engine**: Write-through, write-back, and pull-mirror modes with WAL-based durability
 - **Semantic Search**: Text chunking, embeddings, and hybrid search (dense + BM25 sparse) via Chroma
-- **FUSE Filesystem**: Mount the VFS as a native filesystem (macOS/Linux, Windows stub)
+- **FUSE Filesystem**: Mount the VFS as a native filesystem (macOS/Linux)
 - **MCP Server**: JSON-RPC 2.0 Model Context Protocol server over stdio (7 tools)
 - **REST API**: Axum-based HTTP API with OpenAPI spec
 - **AI Tool Generation**: Generate tool definitions for MCP, OpenAI, and JSON formats
@@ -158,46 +158,6 @@ backends:
     max_connections: 5
 ```
 
-#### WebDAV
-```yaml
-backends:
-  nas:
-    type: webdav
-    url: https://server/dav
-    username: user
-    password: ${WEBDAV_PASS}
-```
-
-#### SFTP
-```yaml
-backends:
-  remote:
-    type: sftp
-    host: server.example.com
-    username: deploy
-    private_key: ~/.ssh/id_ed25519
-    root: /var/data
-```
-
-#### Google Cloud Storage
-```yaml
-backends:
-  gcs:
-    type: gcs
-    bucket: my-gcs-bucket
-    prefix: data/
-```
-
-#### Azure Blob Storage
-```yaml
-backends:
-  azure:
-    type: azure_blob
-    container: my-container
-    account: mystorageaccount
-    access_key: ${AZURE_KEY}
-```
-
 ### Mount Options
 
 ```yaml
@@ -344,9 +304,9 @@ ax/
 ├── crates/
 │   ├── ax-config/     # Configuration parsing, validation, env interpolation
 │   ├── ax-core/       # VFS, routing, caching, sync/WAL, tools, search, pipeline
-│   ├── ax-backends/   # Storage backends (fs, memory, s3, postgres, chroma, webdav, sftp, gcs, azure)
+│   ├── ax-backends/   # Storage backends (fs, memory, s3, postgres, chroma)
 │   ├── ax-indexing/   # Text chunking, embeddings, BM25 sparse, hybrid search
-│   ├── ax-fuse/       # FUSE filesystem (macOS/Linux + Windows stub)
+│   ├── ax-fuse/       # FUSE filesystem (macOS/Linux)
 │   ├── ax-mcp/        # MCP server (JSON-RPC 2.0 over stdio)
 │   ├── ax-server/     # REST API server (Axum)
 │   ├── ax-cli/        # Command-line interface (27 subcommands)

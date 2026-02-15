@@ -31,7 +31,7 @@ pub async fn run(
                                 "Warning: skipping mount '{}' — indexing is only supported for local (fs) backends, not '{}'",
                                 mount.path, backend_name
                             );
-                            eprintln!("Remote backends (S3, GCS, Azure, etc.) should use their own indexing systems.");
+                            eprintln!("Remote backends (for example S3) should use their own indexing systems.");
                             continue;
                         }
                     }

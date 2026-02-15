@@ -425,62 +425,6 @@ pub struct ApiBackendConfig {
     pub auth_header: Option<Secret>,
 }
 
-/// WebDAV backend configuration.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct WebDavBackendConfig {
-    pub url: String,
-    #[serde(default)]
-    pub username: Option<String>,
-    #[serde(default)]
-    pub password: Option<Secret>,
-    #[serde(default)]
-    pub prefix: Option<String>,
-}
-
-/// SFTP backend configuration.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct SftpBackendConfig {
-    pub host: String,
-    #[serde(default = "default_sftp_port")]
-    pub port: u16,
-    pub username: String,
-    #[serde(default)]
-    pub password: Option<Secret>,
-    #[serde(default)]
-    pub private_key: Option<String>,
-    #[serde(default)]
-    pub root: Option<String>,
-}
-
-fn default_sftp_port() -> u16 {
-    22
-}
-
-/// Google Cloud Storage backend configuration.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct GcsBackendConfig {
-    pub bucket: String,
-    #[serde(default)]
-    pub prefix: Option<String>,
-    #[serde(default)]
-    pub credentials_file: Option<String>,
-}
-
-/// Azure Blob Storage backend configuration.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct AzureBlobBackendConfig {
-    pub container: String,
-    pub account: String,
-    #[serde(default)]
-    pub access_key: Option<Secret>,
-    #[serde(default)]
-    pub prefix: Option<String>,
-}
-
 /// Tagged enum for backend configurations.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -493,10 +437,6 @@ pub enum BackendConfig {
     Postgres(PostgresBackendConfig),
     Chroma(ChromaBackendConfig),
     Api(ApiBackendConfig),
-    WebDav(WebDavBackendConfig),
-    Sftp(SftpBackendConfig),
-    Gcs(GcsBackendConfig),
-    AzureBlob(AzureBlobBackendConfig),
 }
 
 /// Chunking configuration.

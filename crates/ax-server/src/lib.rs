@@ -3,7 +3,7 @@
 //!
 //! Exposes AX VFS operations over HTTP using Axum.
 //! Endpoints: /health, /status, /read, /write, /ls, /delete, /stat, /search, /grep,
-//! /append, /exists, /rename, /copy, /branch, /diff, /merge
+//! /append, /exists, /rename, /copy
 
 mod handlers;
 mod routes;

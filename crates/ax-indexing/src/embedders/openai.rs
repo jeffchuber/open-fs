@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
 /// OpenAI-compatible embedding client.
-/// Works with OpenAI, Azure OpenAI, and other compatible APIs.
+/// Works with OpenAI and other compatible APIs.
 pub struct OpenAiEmbedder {
     config: EmbedderConfig,
     client: reqwest::Client,

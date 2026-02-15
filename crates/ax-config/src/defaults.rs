@@ -69,8 +69,6 @@ fn infer_mode(
     let is_remote = backend_config
         .map(|cfg| matches!(cfg,
             BackendConfig::S3(_) | BackendConfig::Chroma(_) | BackendConfig::Api(_)
-            | BackendConfig::WebDav(_) | BackendConfig::Sftp(_) | BackendConfig::Gcs(_)
-            | BackendConfig::AzureBlob(_)
         ))
         .unwrap_or(false);
 

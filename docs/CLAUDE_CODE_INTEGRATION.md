@@ -7,7 +7,7 @@ This guide explains how to use AX's FUSE filesystem integration with Claude Code
 AX exposes a FUSE (Filesystem in Userspace) mount that allows Claude Code to work with AX's virtual filesystem using standard file operations. This means:
 
 - **Zero learning curve**: Claude Code uses its existing Read, Write, Glob, and Grep tools
-- **Transparent multi-backend access**: Files can be backed by local filesystem, memory, S3, PostgreSQL, Chroma, WebDAV, SFTP, GCS, or Azure Blob
+- **Transparent multi-backend access**: Files can be backed by local filesystem, memory, S3, PostgreSQL, or Chroma
 - **Per-mount sync strategies**: Different directories can have different caching and sync behaviors
 - **Semantic search via filesystem**: Query indexed files by listing special `.search/` directories
 

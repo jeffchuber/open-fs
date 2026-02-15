@@ -355,50 +355,6 @@ backends:
     collection: my_embeddings
 ```
 
-### WebDAV
-
-```yaml
-backends:
-  nas:
-    type: webdav
-    url: https://nas.local/dav
-    username: ${WEBDAV_USER}
-    password: ${WEBDAV_PASS}
-```
-
-### SFTP
-
-```yaml
-backends:
-  server:
-    type: sftp
-    host: server.example.com
-    username: deploy
-    private_key: ~/.ssh/id_ed25519
-    root: /var/data
-```
-
-### Google Cloud Storage
-
-```yaml
-backends:
-  gcs:
-    type: gcs
-    bucket: my-gcs-bucket
-    prefix: data/
-```
-
-### Azure Blob Storage
-
-```yaml
-backends:
-  azure:
-    type: azure_blob
-    container: my-container
-    account: myaccount
-    access_key: ${AZURE_KEY}
-```
-
 ---
 
 ## Mixing backends

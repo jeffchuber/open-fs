@@ -63,7 +63,6 @@ caching, syncing, semantic search, and tool generation for AI assistants.
 |   |      |      |      |      |      |      |      |      |        |
 |   v      v      v      v      v      v      v      v      v        |
 | +----+ +----+ +--+ +------+ +------+ +----+ +----+ +---+ +-----+   |
-| | FS | |Mem | |S3| |PgSQL | |Chroma| |WebD| |SFTP| |GCS| |Azure|   |
 | +----+ +----+ +--+ +------+ +------+ +----+ +----+ +---+ +-----+   |
 |                                                                     |
 +=====================================================================+
@@ -71,7 +70,6 @@ caching, syncing, semantic search, and tool generation for AI assistants.
 
 **Key stats:**
 - 10 crates, 100+ source files
-- 9 storage backends (fs, memory, S3, PostgreSQL, Chroma, WebDAV, SFTP, GCS, Azure)
 - 617+ tests across all crates (including integration test suites)
 - 27 CLI subcommands
 - 7 MCP tools, 14 REST endpoints
@@ -126,9 +124,6 @@ caching, syncing, semantic search, and tool generation for AI assistants.
   | mount    |   | FS  Mem  |   | stdio  |   | Axum     |   | Embed   |
   | .search/ |   | S3  Pg   |   | JSON-  |   | /v1/...  |   | BM25    |
   | virtual  |   | Chroma   |   | RPC    |   | /health  |   | Sparse  |
-  | dir      |   | WebDAV   |   | 2.0    |   | /openapi |   |         |
-  |          |   | SFTP GCS |   |        |   |          |   |         |
-  |          |   | Azure    |   |        |   |          |   |         |
   +----------+   +----------+   +--------+   +----------+   +----------+
 ```
 
@@ -237,10 +232,6 @@ ax/
 │   │       ├── s3.rs             # S3-compatible (AWS, R2, MinIO) — Secret credentials
 │   │       ├── postgres.rs       # PostgreSQL blob store — SQL injection protected, Secret
 │   │       ├── chroma.rs         # Chroma vector database
-│   │       ├── webdav.rs         # WebDAV over HTTP — Secret password
-│   │       ├── sftp.rs           # SFTP via russh — Secret password
-│   │       ├── gcs.rs            # Google Cloud Storage
-│   │       └── azure.rs          # Azure Blob Storage — Secret access key
 │   │
 │   ├── ax-indexing/              # Text processing & search indexing
 │   │   └── src/
@@ -270,7 +261,6 @@ ax/
 │   │   │   ├── async_bridge.rs   # OnceLock<Result<Runtime,String>> sync↔async bridge
 │   │   │   ├── common.rs         # AxFsCore: platform-neutral VFS logic [pub(crate)]
 │   │   │   ├── unix_fuse.rs      # fuser::Filesystem impl [pub(crate), cfg(unix)]
-│   │   │   ├── windows_fuse.rs   # WinFsp path utils + compile_error!() [pub(crate), cfg(windows)]
 │   │   │   ├── inode.rs          # Inode table: path↔u64 bidirectional mapping
 │   │   │   └── search_dir.rs     # Virtual /.search/query/ directory
 │   │   └── tests/
@@ -298,7 +288,6 @@ ax/
 │   │           ├── mod.rs         # Module declarations (29 submodules)
 │   │           ├── cat.rs, ls.rs, write.rs, rm.rs, append.rs, ...
 │   │           ├── search.rs, grep.rs, find.rs, index.rs, ...
-│   │           ├── branch.rs, diff.rs, merge.rs
 │   │           ├── mount.rs, unmount.rs, watch.rs
 │   │           ├── serve.rs, mcp.rs, tools.rs
 │   │           ├── wal.rs         # ax wal checkpoint / ax wal status
@@ -489,7 +478,6 @@ All backends implement a common async trait for uniform access:
      ^       ^       ^       ^       ^       ^      ^      ^      ^
      |       |       |       |       |       |      |      |      |
   +------+ +----+ +------+ +------+ +------+ +----+ +----+ +---+ +-----+
-  |  FS  | |Mem | |  S3  | |PgSQL | |Chroma| |WebD| |SFTP| |GCS| |Azure|
   +------+ +----+ +------+ +------+ +------+ +----+ +----+ +---+ +-----+
   |Local | |Hash | |AWS,  | |blob  | |Vector| |HTTP| |SSH | |JSON| |REST|
   |files | |Map  | |MinIO,| |store | |  DB  | |DAV | |file| |API | |API |
@@ -518,10 +506,6 @@ Entry Structure:
 |----------------|-------------------------------|-----------------------------------------|
 | `s3`           | S3Backend                     | aws-sdk-s3, aws-config                  |
 | `postgres`     | PostgresBackend               | sqlx (postgres, chrono)                 |
-| `webdav`       | WebDavBackend                 | quick-xml                               |
-| `sftp`         | SftpBackend                   | russh, russh-sftp, russh-keys           |
-| `gcs`          | GcsBackend                    | urlencoding                             |
-| `azure`        | AzureBlobBackend              | quick-xml, urlencoding                  |
 | `all-backends` | All of the above              | All of the above                        |
 
 **BackendError** (`#[non_exhaustive]`):
@@ -773,14 +757,12 @@ Transparent filesystem integration for Claude Code and other tools:
 │                                                                   │
 │  ┌──────────────────────────────────────────────────────────────┐ │
 │  │                   Kernel / OS                                 │ │
-│  │          (macFUSE / libfuse3 / WinFsp)                       │ │
 │  └───────────────────────┬──────────────────────────────────────┘ │
 │                          │ synchronous callbacks                  │
 │                          v                                        │
 │  ┌──────────────────────────────────────────────────────────────┐ │
 │  │              Platform FUSE Driver                             │ │
 │  │  UnixFuse (cfg(unix), fuser::Filesystem impl)                │ │
-│  │  WindowsFuse (cfg(windows), compile_error!() until impl)     │ │
 │  │  [pub(crate) — not exposed to downstream crates]             │ │
 │  └───────────────────────┬──────────────────────────────────────┘ │
 │                          │                                        │
@@ -987,7 +969,6 @@ Axum-based HTTP server with authentication, middleware, and API versioning:
 Text processing pipeline for semantic search. Both dense embeddings and sparse
 BM25 vectors are computed locally and pushed to Chroma — there is no local
 vector storage. Only local (fs/memory) backends are indexed; remote backends
-(S3, GCS, Azure, etc.) are skipped with a warning.
 
 ```
 ┌═══════════════════════════════════════════════════════════════════════┐
@@ -1284,9 +1265,6 @@ YAML-based configuration with environment variable interpolation and smart defau
 │  │  ┌──────────────────────────────────────────────────────────┐   │  │
 │  │  │ PostgresBackendConfig.connection_url: Secret          │   │  │
 │  │  │ ApiBackendConfig.auth_header: Option<Secret>             │   │  │
-│  │  │ WebDavBackendConfig.password: Option<Secret>             │   │  │
-│  │  │ SftpBackendConfig.password: Option<Secret>               │   │  │
-│  │  │ AzureBlobBackendConfig.access_key: Option<Secret>        │   │  │
 │  │  │ S3Config.access_key_id: Option<Secret>                   │   │  │
 │  │  │ S3Config.secret_access_key: Option<Secret>               │   │  │
 │  │  │ ServerConfig.api_key: Option<Secret>                     │   │  │
@@ -1677,7 +1655,6 @@ Generate tool definitions for AI assistants in multiple formats:
 │      with atomic counters. WAL status reporting. Cache hit rates.     │
 │                                                                       │
 │  11. CROSS-PLATFORM                                                   │
-│      macOS (macFUSE), Linux (libfuse3), Windows (WinFsp planned).     │
 │      Python bindings (PyO3), TypeScript bindings (napi-rs).           │
 │                                                                       │
 └═══════════════════════════════════════════════════════════════════════┘
@@ -1707,15 +1684,12 @@ Architecture at a glance:
 │   ┌────────────────────────v─────────────────────────────────────┐    │
 │   │                     ax-backends                               │    │
 │   │   FS  Memory  S3  PostgreSQL  Chroma                          │    │
-│   │   WebDAV  SFTP  GCS  Azure                                    │    │
 │   │   (all credentials wrapped in Secret type)                    │    │
 │   └──────────────────────────────────────────────────────────────┘    │
 │                                                                       │
 │  Crates: 10 (ax-config, ax-core, ax-backends, ax-indexing, ax-fuse,  │
 │               ax-mcp, ax-server, ax-cli, ax-js, ax-ffi)              │
 │  Tests: 617+ across all crates (incl. integration suites)              │
-│  Backends: 9 (fs, memory, s3, postgres, chroma, webdav, sftp, gcs,   │
-│               azure)                                                  │
 │  Sync: 4 modes (None/WriteThrough/WriteBack/PullMirror)              │
 │        4 profiles (LocalOnly/LocalFirst/RemoteFirst/RemoteOnly)       │
 │  Search: Dense + BM25 sparse + hybrid RRF fusion                      │

@@ -3,11 +3,11 @@
 This document describes the architecture of the AX virtual filesystem (VFS), how its major components interact, and what is complete vs. stubbed or optional. It reflects the current workspace state and the focus on non‑FUSE functionality.
 
 **Summary**
-AX exposes a unified VFS that can mount multiple storage backends (local filesystem, memory, S3, Postgres, Chroma, WebDAV, SFTP, GCS, Azure Blob). The VFS supports caching, sync modes (write-through, write-back, pull mirror), indexing/search via Chroma, FUSE mounting, and a REST API + CLI + MCP server for automation. It is designed around clean traits and strong config validation to keep behavior predictable in production.
+AX exposes a unified VFS that can mount multiple storage backends (local filesystem, memory, S3, Postgres, Chroma). The VFS supports caching, sync modes (write-through, write-back, pull mirror), indexing/search via Chroma, FUSE mounting, and a REST API + CLI + MCP server for automation. It is designed around clean traits and strong config validation to keep behavior predictable in production.
 
 **High-Level Components**
 - `ax-config`: YAML configuration, env interpolation, validation, migration.
-- `ax-backends`: Storage backends (fs, memory, s3, postgres, chroma, webdav, sftp, gcs, azure).
+- `ax-backends`: Storage backends (fs, memory, s3, postgres, chroma).
 - `ax-core`: VFS, caching, sync/WAL, indexing pipeline, search utilities, watch engine.
 - `ax-indexing`: Chunkers, embedding adapters, content hashing, extractors.
 - `ax-server`: REST API and OpenAPI schema.
@@ -76,16 +76,16 @@ fs / s3 / pg                   memory / fs
 
 Complete and production‑ready:
 - VFS routing, caching, and sync/WAL logic.
-- Backends: `fs`, `memory`, `s3`, `postgres`, `chroma`, `webdav`, `sftp`, `gcs`, `azure`.
+- Backends: `fs`, `memory`, `s3`, `postgres`, `chroma`.
 - Chroma integration for vector storage.
 - REST API + OpenAPI schema, including base64 content support.
 - CLI (27 subcommands) and MCP server for automation.
-- FUSE mount (macOS/Linux via fuser; Windows WinFsp has path utilities but `#[cfg(windows)] compile_error!()` prevents builds until full impl).
+- FUSE mount (macOS/Linux via fuser).
 - Chunkers, content hash, and extractors.
 
 External service dependencies:
 - Embedders requiring external services (`openai`, `ollama`) are integration points; tests are ignored unless those services are available.
-- Remote backend tests (S3, PostgreSQL, Chroma, WebDAV, SFTP, GCS, Azure) require live services; unit tests are `#[ignore]`.
+- Remote backend tests (S3, PostgreSQL, Chroma) require live services; unit tests are `#[ignore]`.
 - `ax-ffi` and `ax-js` are excluded from the default workspace build.
 
 **Diagrams: Sync + WAL**
@@ -113,6 +113,5 @@ The following are covered by unit and integration tests:
 - Chroma/OpenAI/Ollama tests are skipped by default because they require external services.
 
 **Future Work (Optional)**
-- Complete Windows FUSE implementation (WinFsp `FileSystemInterface`). Currently protected by `#[cfg(windows)] compile_error!()`.
 - Add REST API integration tests for binary data round‑trips over base64.
 - Metrics exporter (Prometheus/OTel) and deployment templates.

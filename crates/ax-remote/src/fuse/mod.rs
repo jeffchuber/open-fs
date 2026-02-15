@@ -19,7 +19,6 @@
 //! The module is split into platform-neutral and platform-specific submodules:
 //! - `common` — `AxFsCore` struct with all VFS interaction logic
 //! - `unix_fuse` — `fuser::Filesystem` impl for macOS/Linux
-//! - `windows_fuse` — (future) WinFsp integration for Windows
 //!
 //! # Example
 //!
@@ -37,8 +36,6 @@ mod inode;
 mod search_dir;
 #[cfg(unix)]
 pub(crate) mod unix_fuse;
-#[cfg(windows)]
-pub(crate) mod windows_fuse;
 
 pub use async_bridge::{block_on, init_runtime, spawn, FuseError, FuseResult};
 pub use common::{AxFsCore, DirEntry, FsOpError, ReadDirResult};

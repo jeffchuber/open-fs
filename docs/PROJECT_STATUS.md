@@ -4,12 +4,12 @@
 
 ## Executive Summary
 
-AX (Agentic Files) is a virtual filesystem designed for AI agents, providing unified access to multiple storage backends with caching, sync strategies, semantic search, and AI tool generation. The project has reached **v0.3.0** with additional backends, incremental indexing, Windows FUSE support, and removal of the incomplete versioning system.
+AX (Agentic Files) is a virtual filesystem designed for AI agents, providing unified access to multiple storage backends with caching, sync strategies, semantic search, and AI tool generation. The project has reached **v0.3.0** with incremental indexing and a Unix FUSE implementation.
 
 ```
 Total Tests: 617 passing (+5 ignored for external services)
 Crates: 8 production + language bindings
-Backends: 9 (fs, memory, s3, postgres, chroma, webdav, sftp, gcs, azure)
+Backends: 5 (fs, memory, s3, postgres, chroma)
 CLI Commands: 27
 ```
 
@@ -22,9 +22,9 @@ ax/
 ├── crates/
 │   ├── ax-config/      # Configuration parsing, validation, env interpolation
 │   ├── ax-core/        # VFS, router, cache, sync engine, tools generation
-│   ├── ax-backends/    # Storage backends (fs, memory, s3, postgres, chroma, webdav, sftp, gcs, azure)
+│   ├── ax-backends/    # Storage backends (fs, memory, s3, postgres, chroma)
 │   ├── ax-indexing/    # Text chunking, embeddings, BM25, hybrid search
-│   ├── ax-fuse/        # FUSE filesystem (macOS/Linux + Windows WinFsp)
+│   ├── ax-fuse/        # FUSE filesystem (macOS/Linux)
 │   ├── ax-mcp/         # MCP server (JSON-RPC 2.0 over stdio, 7 tools)
 │   ├── ax-server/      # REST API server (Axum, 14 endpoints)
 │   ├── ax-cli/         # Command-line interface (27 commands)
@@ -74,10 +74,6 @@ ax/
 | **S3** | Complete | - | AWS + S3-compatible (MinIO, etc.) |
 | **PostgreSQL** | Complete | - | Auto table creation, binary storage |
 | **Chroma** | Complete | 4 | Vector DB: dense+sparse vectors, collection metadata |
-| **WebDAV** | Complete | 7 | HTTP PROPFIND/GET/PUT/DELETE via reqwest + quick-xml |
-| **SFTP** | Complete | 5 | SSH File Transfer via russh + russh-sftp |
-| **GCS** | Complete | 7 | Google Cloud Storage JSON API via reqwest |
-| **Azure Blob** | Complete | 8 | Azure REST API via reqwest + quick-xml |
 | **Error types** | Complete | 9 | Transient error detection, retry classification |
 
 ### Indexing & Search (100% Complete)
@@ -110,7 +106,7 @@ ax/
 | `search` | Complete | Semantic search |
 | `watch` | Complete | Watch for changes with work-queue-backed indexing |
 | `mount` | Complete | FUSE mount (ax-fuse) |
-| `unmount` | Complete | FUSE unmount (macOS/Linux/Windows) |
+| `unmount` | Complete | FUSE unmount (macOS/Linux) |
 | `serve` | Complete | Start REST API server (--host, --port, --api-key) |
 | `mcp` | Complete | Run MCP server over stdio |
 | `config` | Complete | Show configuration |
@@ -126,11 +122,10 @@ ax/
 |---------|--------|-------|-------|
 | Platform-neutral core (`common.rs`) | Complete | 28 | `AxFsCore` with all VFS interaction logic |
 | Unix FUSE driver (`unix_fuse.rs`) | Complete | 6 | `fuser::Filesystem` impl, FsOpError→errno |
-| Windows FUSE driver (`windows_fuse.rs`) | Complete | 8 | WinFsp path conversion; `compile_error!()` on Windows builds |
 | Inode management | Complete | 42 | Path-to-inode mapping, concurrent access |
 | Async bridge | Complete | 29 | Sync FUSE callbacks to async VFS |
 | Virtual .search/ | Complete | 46 | Semantic search via filesystem |
-| mount/unmount CLI | Complete | - | macOS/Linux/Windows lifecycle |
+| mount/unmount CLI | Complete | - | macOS/Linux lifecycle |
 | Integration tests | Complete | 34 | Full lifecycle, concurrent access, edge cases |
 
 ### MCP Server (100% Complete — 29 unit + 6 integration tests)
@@ -163,14 +158,6 @@ ax/
 
 ## Recent Work Completed (v0.3.0)
 
-### New Backends
-
-- **WebDAV** — HTTP-based file access via PROPFIND/GET/PUT/DELETE (reqwest + quick-xml)
-- **SFTP** — SSH File Transfer Protocol via russh + russh-sftp, key/password auth
-- **Google Cloud Storage** — GCS JSON API backend via reqwest, service account auth
-- **Azure Blob Storage** — Azure REST API via reqwest + quick-xml, access key auth
-- All backends are feature-gated (`webdav`, `sftp`, `gcs`, `azure`) with `all-backends` umbrella feature
-
 ### Indexing & Search Pipeline
 
 - **IndexState** — Persistent JSON tracking of file path → (size, mtime, chunks, indexed_at)
@@ -179,18 +166,14 @@ ax/
 - **ax index-status** — Show index state (files indexed, total chunks, last updated, recent files)
 - **Sparse vectors to Chroma** — Both dense embeddings and BM25 sparse vectors are pushed to Chroma at index time via `SparseEmbedding` in `upsert()`
 - **SparseEncoder persistence** — Vocab/IDF state serialized to JSON and stored in Chroma collection metadata; restored on pipeline startup
-- **Backend guard** — `ax index` only indexes local (fs/memory) backends; remote backends (S3, GCS, Azure, etc.) are skipped with a warning
 - **Watch mode** — Uses SQLite-backed work queue (`.ax_watch_queue.db`) with debounce, dedup, retry, and crash recovery via `recover_stuck()`
 - **No local vector storage** — All vectors (dense and sparse) stored and queried from Chroma; `SearchEngine` has no in-memory sparse cache
 
-### Windows FUSE Support
+### FUSE Updates
 
-- **Platform-neutral refactor** — FUSE crate split into `common.rs` (AxFsCore) + `unix_fuse.rs` + `windows_fuse.rs`
 - **AxFsCore** — All VFS interaction logic in platform-independent struct with `do_*` helper methods
 - **UnixFuse** — `fuser::Filesystem` impl delegating to AxFsCore, FsOpError → errno mapping
-- **WindowsFuse** — WinFsp stub with path conversion (backslash ↔ forward slash)
-- **Platform-conditional deps** — fuser/libc on Unix, winfsp/windows on Windows
-- **Unmount** — macOS (`umount`), Linux (`fusermount -u`), Windows (`net use /delete`)
+- **Unmount** — macOS (`umount`) and Linux (`fusermount -u`)
 
 ### Bug Fixes
 
@@ -243,7 +226,6 @@ cargo test --workspace --features all-backends
    - Pattern search with glob and grep
 
 2. **Remote Storage**
-   - S3, WebDAV, SFTP, GCS, Azure backends with configurable sync
    - PostgreSQL for structured file storage
    - Cache with configurable TTL
 
@@ -266,7 +248,6 @@ cargo test --workspace --features all-backends
 
 6. **Cross-Platform FUSE**
    - macOS/Linux via fuser
-   - Windows path handling via WinFsp (path conversion utilities available; `compile_error!()` prevents builds until `FileSystemInterface` is implemented)
 
 ---
 
@@ -277,7 +258,6 @@ cargo test --workspace --features all-backends
 1. **FUSE Platform Support**
    - macOS: Requires macFUSE (user must allow kernel extension)
    - Linux: Requires libfuse3
-   - Windows: WinFsp path conversion utilities exist; `#[cfg(windows)] compile_error!()` prevents builds until full `FileSystemInterface` impl is completed
 
 2. **S3 Credentials**
    - Uses AWS default credential chain
@@ -288,7 +268,6 @@ cargo test --workspace --features all-backends
    - No embedded vector index option
 
 4. **Remote Backend Tests**
-   - S3, PostgreSQL, Chroma, WebDAV, SFTP, GCS, Azure tests require live services
    - Unit tests cover config/path logic; integration tests are `#[ignore]`
 
 ### Not Production Ready
@@ -305,15 +284,10 @@ cargo test --workspace --features all-backends
 
 - **v0.1.0** — Core VFS, 5 backends, caching, sync, search, CLI, FUSE, language bindings
 - **v0.2.0** — Error handling (thiserror), config validation, watch mode, migration tool
-- **v0.3.0** — 4 new backends (WebDAV, SFTP, GCS, Azure), incremental indexing, Windows FUSE refactor, sparse+dense vectors to Chroma, work-queue watch mode
 
 ### Next (v0.4.0)
 
-1. **Windows FUSE Completion**
-   - Implement `winfsp::FileSystemInterface` for `WindowsFuse`
-   - End-to-end Windows testing
-
-2. **Production Hardening** (partially complete)
+1. **Production Hardening** (partially complete)
    - ~~Backend conformance test suite~~ (done — fs + memory)
    - ~~Multi-mount VFS integration tests~~ (done — 8 tests)
    - ~~Server API integration tests~~ (done — 10 HTTP tests with real Axum server)
@@ -325,16 +299,16 @@ cargo test --workspace --features all-backends
 
 ### Long Term (v1.0.0)
 
-4. **Multi-Tenant Support**
+2. **Multi-Tenant Support**
    - Namespace isolation
    - Per-tenant quotas
    - Access control lists
 
-5. **Distributed Sync**
+3. **Distributed Sync**
    - Conflict resolution
    - Sync status dashboard
 
-6. **Production Hardening**
+4. **Production Hardening**
    - Security audit
    - Rate limiting and quota management
    - Retry logic for transient backend failures
@@ -391,7 +365,7 @@ match self.cache.get(key).await {
                             │
                ┌────────────▼────────────┐
                │  FUSE Mount  ~/ax-mount │
-               │  UnixFuse / WindowsFuse │
+               │        UnixFuse         │
                └────────────┬────────────┘
                             │
                ┌────────────▼────────────┐
@@ -406,7 +380,6 @@ match self.cache.get(key).await {
                             │
   ┌──────┬──────┬──────┬────┼────┬──────┬──────┬──────┐
   ▼      ▼      ▼      ▼   ▼    ▼      ▼      ▼      ▼
- FS   Memory   S3   PgSQL Chroma WebDAV SFTP  GCS   Azure
 ```
 
 ---
@@ -462,11 +435,6 @@ backends:
     type: s3
     bucket: my-bucket
     region: us-east-1
-  nas:
-    type: webdav
-    url: https://nas.local/dav
-    username: user
-    password: ${WEBDAV_PASS}
 
 mounts:
   - path: /workspace
@@ -478,10 +446,6 @@ mounts:
     backend: s3
     sync:
       mode: write_through
-  - path: /shared
-    backend: nas
-    sync:
-      mode: pull_mirror
 ```
 
 ---
@@ -489,9 +453,8 @@ mounts:
 ## Contributing
 
 1. Fork the repository
-2. Create a feature branch
-3. Run tests: `cargo test --workspace`
-4. Submit a pull request
+2. Run tests: `cargo test --workspace`
+3. Submit a pull request
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for detailed design documentation.
 

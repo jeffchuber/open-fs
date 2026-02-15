@@ -5,7 +5,7 @@ This is a deep technical review of the repository as of this workspace state. It
 ---
 
 **Executive Summary**
-AX is a multi‑backend virtual filesystem with strong ergonomics for agents. It provides a unified namespace over local files, S3, Postgres, memory, Chroma, WebDAV, SFTP, GCS, and Azure Blob, with optional caching, WAL-backed sync, FUSE mounting, and indexing/search via Chroma. The core VFS, caching, sync, CLI (27 subcommands), REST API (14 endpoints), MCP server (7 tools), and FUSE interfaces are solid and test‑covered. Remaining gaps are mostly around production ergonomics: end‑to‑end API tests, formal auth/rate limiting policy, observability, and clearer operational defaults for watch/polling and sync.
+AX is a multi‑backend virtual filesystem with strong ergonomics for agents. It provides a unified namespace over local files, S3, Postgres, memory, and Chroma, with optional caching, WAL-backed sync, FUSE mounting, and indexing/search via Chroma. The core VFS, caching, sync, CLI (27 subcommands), REST API (14 endpoints), MCP server (7 tools), and FUSE interfaces are solid and test‑covered. Remaining gaps are mostly around production ergonomics: end‑to‑end API tests, formal auth/rate limiting policy, observability, and clearer operational defaults for watch/polling and sync.
 
 ---
 
@@ -25,16 +25,12 @@ VFS and Routing
 - Cross‑mount operations handled safely.
 - Uniform path semantics across backends.
 
-Backends (9 total, all feature-gated)
+Backends (5 total, all feature-gated)
 - `fs`: local filesystem backend with traversal protections.
 - `memory`: in‑memory backend for testing and ephemeral mounts.
 - `s3`: S3 object storage backend with prefix support (AWS, MinIO, R2).
 - `postgres`: table-backed backend with path normalization.
 - `chroma`: vector store backend used for search/indexing.
-- `webdav`: HTTP-based file access via PROPFIND/GET/PUT/DELETE.
-- `sftp`: SSH File Transfer Protocol via russh.
-- `gcs`: Google Cloud Storage JSON API backend.
-- `azure`: Azure Blob Storage REST API backend.
 
 Cache Layer
 - Per‑mount cache with max size and max entries.
@@ -67,8 +63,8 @@ Surfaces
 **What Is Complete**
 - Core VFS behaviors: routing, read/write/rename/list/stat, access control.
 - Cache logic and sync/WAL logic.
-- Backends: `fs`, `memory`, `s3`, `postgres`, `chroma`, `webdav`, `sftp`, `gcs`, `azure`.
-- FUSE mount (macOS/Linux via fuser; Windows WinFsp path utilities with `#[cfg(windows)] compile_error!()`).
+- Backends: `fs`, `memory`, `s3`, `postgres`, `chroma`.
+- FUSE mount (macOS/Linux via fuser).
 - Indexing pipeline and chunker correctness, including Unicode boundaries.
 - REST API (14 endpoints, Axum), CLI (27 subcommands), and MCP server (7 tools).
 - Config validation and env interpolation.

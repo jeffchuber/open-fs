@@ -325,7 +325,7 @@ Agents that interact with business data — customer records, documents, analyti
 ```
 
 **What AX brings:**
-- **Backend abstraction** — S3, local, Chroma, GCS, Azure Blob, WebDAV, SFTP, PostgreSQL all appear as directories in one namespace
+- **Backend abstraction** — S3, local, Chroma, and PostgreSQL all appear as directories in one namespace
 - **Mount-based routing** — `/documents` routes to S3, `/cache` to local disk, `/knowledge` to Chroma — transparent to the agent
 - **Caching layer** — frequently accessed S3 objects are cached locally, reducing latency for iterative agent access patterns
 - **Environment interpolation** — config references like `${AWS_BUCKET}` resolve at runtime, so the same agent config works across dev/staging/prod

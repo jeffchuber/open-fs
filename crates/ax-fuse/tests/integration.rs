@@ -526,7 +526,8 @@ fn test_search_dir_many_queries() {
     for q in 0..100 {
         let query_path = format!("/.search/query/query{}", q);
         let entries = search_dir.readdir(&query_path).unwrap();
-        assert_eq!(entries.len(), 10);
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].1, "results.txt");
     }
 }
 
@@ -549,12 +550,20 @@ fn test_search_dir_large_result_set() {
         .collect();
 
     let entries = search_dir.create_result_entries(&results);
-    assert_eq!(entries.len(), 1000);
+    assert_eq!(entries.len(), 1);
 
     search_dir.store_results("big_query", entries);
 
     let dir_entries = search_dir.readdir("/.search/query/big_query").unwrap();
-    assert_eq!(dir_entries.len(), 1000);
+    assert_eq!(dir_entries.len(), 1);
+    assert_eq!(dir_entries[0].1, "results.txt");
+
+    let bytes = search_dir
+        .read_file("/.search/query/big_query/results.txt")
+        .unwrap();
+    let text = String::from_utf8(bytes).unwrap();
+    assert!(text.contains("/workspace/file0.py"));
+    assert!(text.contains("/workspace/file999.py"));
 }
 
 #[test]
@@ -575,29 +584,34 @@ fn test_search_dir_query_update() {
 
     // Should have new results
     let entries = search_dir.readdir("/.search/query/query").unwrap();
-    assert_eq!(entries.len(), 2);
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].1, "results.txt");
 
-    let names: Vec<_> = entries.iter().map(|(_, name, _)| name.as_str()).collect();
-    assert!(names.contains(&"01_file2.py"));
-    assert!(names.contains(&"02_file3.py"));
+    let bytes = search_dir
+        .read_file("/.search/query/query/results.txt")
+        .unwrap();
+    let text = String::from_utf8(bytes).unwrap();
+    assert!(text.contains("/file2.py"));
+    assert!(text.contains("/file3.py"));
+    assert!(!text.contains("/file1.py"));
 }
 
 #[test]
-fn test_search_dir_symlink_targets_correct() {
+fn test_search_dir_concatenated_results_content() {
     let inodes = Arc::new(InodeTable::new());
     let search_dir = SearchDir::new(inodes.clone());
 
     let results = vec![
         (
             "/workspace/src/auth/login.py".to_string(),
-            "content".to_string(),
+            "login content".to_string(),
             0.9,
             10,
             20,
         ),
         (
             "/workspace/tests/test_auth.py".to_string(),
-            "content".to_string(),
+            "test content".to_string(),
             0.8,
             5,
             15,
@@ -605,13 +619,12 @@ fn test_search_dir_symlink_targets_correct() {
     ];
 
     let entries = search_dir.create_result_entries(&results);
-
-    // Verify symlink targets
-    assert!(entries[0].target.ends_with("/workspace/src/auth/login.py"));
-    assert!(entries[1].target.ends_with("/workspace/tests/test_auth.py"));
-
-    // Targets should be relative paths going up to root
-    assert!(entries[0].target.starts_with("../../.."));
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].name, "results.txt");
+    assert!(entries[0].content.contains("/workspace/src/auth/login.py:10-20"));
+    assert!(entries[0].content.contains("login content"));
+    assert!(entries[0].content.contains("/workspace/tests/test_auth.py:5-15"));
+    assert!(entries[0].content.contains("test content"));
 }
 
 #[test]
