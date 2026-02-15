@@ -1,8 +1,8 @@
 use ax_core::{Backend, ChromaStore};
-use ax_sim::Sim;
 use ax_sim::invariants::check_final_consistency;
 use ax_sim::ops::{MountId, Op};
 use ax_sim::FaultConfig;
+use ax_sim::Sim;
 use serde_json::json;
 
 // ─── Existing tests ─────────────────────────────────────────────────────────
@@ -347,8 +347,7 @@ async fn sim_detects_chroma_corruption() {
     assert!(v.is_empty(), "{:#?}", v);
 
     // Remove indexed docs from chroma without updating oracle.
-    let _ = sim
-        .agents[0]
+    let _ = sim.agents[0]
         .chroma
         .delete_by_metadata(json!({"source_path": path}))
         .await
@@ -542,7 +541,11 @@ async fn sim_write_back_deferred_visibility() {
 
     // The raw backend should NOT have the file yet (write-back hasn't flushed)
     assert!(
-        sim.agents[1].indexed_backend.read("deferred.txt").await.is_err(),
+        sim.agents[1]
+            .indexed_backend
+            .read("deferred.txt")
+            .await
+            .is_err(),
         "write-back should not have flushed to backend yet"
     );
 
@@ -559,8 +562,143 @@ async fn sim_write_back_deferred_visibility() {
     assert!(v.is_empty(), "{:#?}", v);
 
     // Now the raw backend should have the file
-    let raw = sim.agents[1].indexed_backend.read("deferred.txt").await.unwrap();
+    let raw = sim.agents[1]
+        .indexed_backend
+        .read("deferred.txt")
+        .await
+        .unwrap();
     assert_eq!(raw, b"pending");
+}
+
+#[tokio::test(start_paused = true)]
+async fn sim_write_back_index_search_flush_story() {
+    let mut sim = Sim::new_with_config(2026, None, true).await;
+
+    let path = "stories/flush_story.txt".to_string();
+    let content = b"index me before remote flush".to_vec();
+
+    let v = sim
+        .step_with(
+            1,
+            Op::Write {
+                mount: MountId::Indexed,
+                path: path.clone(),
+                content: content.clone(),
+            },
+        )
+        .await;
+    assert!(v.is_empty(), "{:#?}", v);
+
+    // Write-back keeps this pending in cache until flush.
+    assert!(sim.agents[1].indexed_backend.read(&path).await.is_err());
+
+    let v = sim.step_with(1, Op::IndexFile { path: path.clone() }).await;
+    assert!(v.is_empty(), "{:#?}", v);
+    assert!(
+        sim.agents[1].chroma.has_docs_for_path(&path),
+        "expected chroma docs for '{}'",
+        path
+    );
+
+    let v = sim
+        .step_with(
+            0,
+            Op::SearchChroma {
+                query: "before remote flush".to_string(),
+            },
+        )
+        .await;
+    assert!(v.is_empty(), "{:#?}", v);
+
+    let v = sim.step_with(1, Op::FlushWriteBack).await;
+    assert!(v.is_empty(), "{:#?}", v);
+
+    let raw = sim.agents[1].indexed_backend.read(&path).await.unwrap();
+    assert_eq!(raw, content);
+
+    sim.shutdown().await;
+    let violations = check_final_consistency(&sim.agents, &sim.oracle).await;
+    assert!(violations.is_empty(), "{:#?}", violations);
+}
+
+#[tokio::test(start_paused = true)]
+async fn sim_write_back_shutdown_flushes_pending_writes() {
+    let mut sim = Sim::new_with_config(3030, None, true).await;
+
+    let path = "shutdown/pending.txt".to_string();
+    let content = b"flush-on-shutdown".to_vec();
+
+    let v = sim
+        .step_with(
+            1,
+            Op::Write {
+                mount: MountId::Indexed,
+                path: path.clone(),
+                content: content.clone(),
+            },
+        )
+        .await;
+    assert!(v.is_empty(), "{:#?}", v);
+    assert!(sim.pending_write_back_paths.contains(&path));
+    assert!(sim.agents[1].indexed_backend.read(&path).await.is_err());
+
+    // Even without explicit FlushWriteBack op, shutdown should drain pending writes.
+    sim.shutdown().await;
+
+    let raw = sim.agents[1].indexed_backend.read(&path).await.unwrap();
+    assert_eq!(raw, content);
+
+    let violations = check_final_consistency(&sim.agents, &sim.oracle).await;
+    assert!(violations.is_empty(), "{:#?}", violations);
+}
+
+#[tokio::test(start_paused = true)]
+async fn sim_write_back_concurrent_flush_keeps_new_pending_paths() {
+    let mut sim = Sim::new_with_config(4040, None, true).await;
+
+    let stale_path = "pending/stale.txt".to_string();
+    let v = sim
+        .step_with(
+            1,
+            Op::Write {
+                mount: MountId::Indexed,
+                path: stale_path.clone(),
+                content: b"stale".to_vec(),
+            },
+        )
+        .await;
+    assert!(v.is_empty(), "{:#?}", v);
+    assert!(sim.pending_write_back_paths.contains(&stale_path));
+
+    let fresh_path = "pending/fresh.txt".to_string();
+    let v = sim
+        .step_concurrent_with(
+            Op::FlushWriteBack,
+            Op::Write {
+                mount: MountId::Indexed,
+                path: fresh_path.clone(),
+                content: b"fresh".to_vec(),
+            },
+        )
+        .await;
+    assert!(v.is_empty(), "{:#?}", v);
+
+    assert!(
+        !sim.pending_write_back_paths.contains(&stale_path),
+        "flush should clear previous pending paths"
+    );
+    assert!(
+        sim.pending_write_back_paths.contains(&fresh_path),
+        "concurrent indexed write should remain pending after flush step"
+    );
+
+    let v = sim.step_with(1, Op::FlushWriteBack).await;
+    assert!(v.is_empty(), "{:#?}", v);
+    assert!(sim.pending_write_back_paths.is_empty());
+
+    sim.shutdown().await;
+    let violations = check_final_consistency(&sim.agents, &sim.oracle).await;
+    assert!(violations.is_empty(), "{:#?}", violations);
 }
 
 // ─── Concurrency Tests ──────────────────────────────────────────────────────
@@ -719,8 +857,7 @@ async fn sim_intentional_fail_chroma_corruption() {
     assert!(v.is_empty(), "{:#?}", v);
 
     // Remove indexed docs from chroma without updating oracle.
-    let _ = sim
-        .agents[0]
+    let _ = sim.agents[0]
         .chroma
         .delete_by_metadata(json!({"source_path": path}))
         .await

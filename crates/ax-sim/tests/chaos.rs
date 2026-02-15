@@ -1,5 +1,5 @@
 use ax_sim::fault::FaultStats;
-use ax_sim::invariants::Violation;
+use ax_sim::invariants::{check_final_consistency, Violation};
 use ax_sim::ops::{MountId, Op};
 use ax_sim::{FaultConfig, Sim};
 use proptest::prelude::*;
@@ -33,6 +33,55 @@ fn run_mixed_case(
         let violations = sim.run_mixed(steps, concurrent_ratio).await.to_vec();
         let stats = aggregate_faults(&sim);
         (violations, stats)
+    })
+}
+
+fn run_forced_flush_case(seed: u64, steps: usize, concurrent_ratio: f64) -> Vec<Violation> {
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+
+    rt.block_on(async move {
+        tokio::time::pause();
+        let mut sim = Sim::new_with_config(seed ^ 0xA11C_E5EE_D00D_BAAD, None, true).await;
+        let mut rng = ChaCha8Rng::seed_from_u64(seed.wrapping_add(0x9E37_79B9_7F4A_7C15));
+        let ratio = if concurrent_ratio.is_finite() {
+            concurrent_ratio.clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+
+        for step in 0..steps {
+            // Force regular flushes so write-back drain paths are exercised heavily.
+            if step % 5 == 0 {
+                let _ = sim.step_with(1, Op::FlushWriteBack).await;
+                continue;
+            }
+
+            if rng.gen_bool(ratio) {
+                let op0 = random_op(&mut rng);
+                let op1 = if rng.gen_bool(0.35) {
+                    Op::FlushWriteBack
+                } else {
+                    random_op(&mut rng)
+                };
+                let _ = sim.step_concurrent_with(op0, op1).await;
+            } else {
+                let agent_id = if rng.gen_bool(0.5) { 0 } else { 1 };
+                let op = if agent_id == 1 && rng.gen_bool(0.25) {
+                    Op::FlushWriteBack
+                } else {
+                    random_op(&mut rng)
+                };
+                let _ = sim.step_with(agent_id, op).await;
+            }
+        }
+
+        sim.shutdown().await;
+        let mut violations = sim.violations.clone();
+        violations.extend(check_final_consistency(&sim.agents, &sim.oracle).await);
+        violations
     })
 }
 
@@ -122,50 +171,284 @@ async fn chaos_all_ops_scripted() {
     let mut sim = Sim::new_with_config(4242, None, true).await;
 
     let ops: Vec<(usize, Op)> = vec![
-        (0, Op::Write { mount: MountId::Work, path: "w0.txt".to_string(), content: b"w0".to_vec() }),
-        (0, Op::Read { mount: MountId::Work, path: "w0.txt".to_string() }),
-        (0, Op::Append { mount: MountId::Work, path: "w0.txt".to_string(), content: b"+".to_vec() }),
-        (0, Op::Exists { mount: MountId::Work, path: "w0.txt".to_string() }),
-        (0, Op::Stat { mount: MountId::Work, path: "w0.txt".to_string() }),
-        (0, Op::List { mount: MountId::Work, path: "".to_string() }),
-        (0, Op::Rename { mount: MountId::Work, from: "w0.txt".to_string(), to: "w0_renamed.txt".to_string() }),
-        (0, Op::Delete { mount: MountId::Work, path: "w0_renamed.txt".to_string() }),
-
-        (0, Op::Write { mount: MountId::Indexed, path: "i0.txt".to_string(), content: b"i0".to_vec() }),
-        (0, Op::Append { mount: MountId::Indexed, path: "i0.txt".to_string(), content: b"+".to_vec() }),
-        (0, Op::IndexFile { path: "i0.txt".to_string() }),
-        (0, Op::Read { mount: MountId::Indexed, path: "i0.txt".to_string() }),
-        (0, Op::Rename { mount: MountId::Indexed, from: "i0.txt".to_string(), to: "i0_renamed.txt".to_string() }),
-        (0, Op::Delete { mount: MountId::Indexed, path: "i0_renamed.txt".to_string() }),
-
-        (1, Op::Write { mount: MountId::Indexed, path: "i1.txt".to_string(), content: b"i1".to_vec() }),
-        (1, Op::Append { mount: MountId::Indexed, path: "i1.txt".to_string(), content: b"+".to_vec() }),
+        (
+            0,
+            Op::Write {
+                mount: MountId::Work,
+                path: "w0.txt".to_string(),
+                content: b"w0".to_vec(),
+            },
+        ),
+        (
+            0,
+            Op::Read {
+                mount: MountId::Work,
+                path: "w0.txt".to_string(),
+            },
+        ),
+        (
+            0,
+            Op::Append {
+                mount: MountId::Work,
+                path: "w0.txt".to_string(),
+                content: b"+".to_vec(),
+            },
+        ),
+        (
+            0,
+            Op::Exists {
+                mount: MountId::Work,
+                path: "w0.txt".to_string(),
+            },
+        ),
+        (
+            0,
+            Op::Stat {
+                mount: MountId::Work,
+                path: "w0.txt".to_string(),
+            },
+        ),
+        (
+            0,
+            Op::List {
+                mount: MountId::Work,
+                path: "".to_string(),
+            },
+        ),
+        (
+            0,
+            Op::Rename {
+                mount: MountId::Work,
+                from: "w0.txt".to_string(),
+                to: "w0_renamed.txt".to_string(),
+            },
+        ),
+        (
+            0,
+            Op::Delete {
+                mount: MountId::Work,
+                path: "w0_renamed.txt".to_string(),
+            },
+        ),
+        (
+            0,
+            Op::Write {
+                mount: MountId::Indexed,
+                path: "i0.txt".to_string(),
+                content: b"i0".to_vec(),
+            },
+        ),
+        (
+            0,
+            Op::Append {
+                mount: MountId::Indexed,
+                path: "i0.txt".to_string(),
+                content: b"+".to_vec(),
+            },
+        ),
+        (
+            0,
+            Op::IndexFile {
+                path: "i0.txt".to_string(),
+            },
+        ),
+        (
+            0,
+            Op::Read {
+                mount: MountId::Indexed,
+                path: "i0.txt".to_string(),
+            },
+        ),
+        (
+            0,
+            Op::Rename {
+                mount: MountId::Indexed,
+                from: "i0.txt".to_string(),
+                to: "i0_renamed.txt".to_string(),
+            },
+        ),
+        (
+            0,
+            Op::Delete {
+                mount: MountId::Indexed,
+                path: "i0_renamed.txt".to_string(),
+            },
+        ),
+        (
+            1,
+            Op::Write {
+                mount: MountId::Indexed,
+                path: "i1.txt".to_string(),
+                content: b"i1".to_vec(),
+            },
+        ),
+        (
+            1,
+            Op::Append {
+                mount: MountId::Indexed,
+                path: "i1.txt".to_string(),
+                content: b"+".to_vec(),
+            },
+        ),
         (1, Op::FlushWriteBack),
-        (1, Op::Read { mount: MountId::Indexed, path: "i1.txt".to_string() }),
-        (1, Op::IndexFile { path: "i1.txt".to_string() }),
-        (1, Op::Rename { mount: MountId::Indexed, from: "i1.txt".to_string(), to: "i1_renamed.txt".to_string() }),
-        (1, Op::Delete { mount: MountId::Indexed, path: "i1_renamed.txt".to_string() }),
-
-        (0, Op::Read { mount: MountId::SharedRead, path: "seed_0.txt".to_string() }),
-        (0, Op::Exists { mount: MountId::SharedRead, path: "seed_0.txt".to_string() }),
-        (0, Op::Stat { mount: MountId::SharedRead, path: "seed_0.txt".to_string() }),
-        (0, Op::List { mount: MountId::SharedRead, path: "".to_string() }),
-        (0, Op::Write { mount: MountId::SharedRead, path: "ro.txt".to_string(), content: b"no".to_vec() }),
-        (0, Op::Append { mount: MountId::SharedRead, path: "seed_0.txt".to_string(), content: b"no".to_vec() }),
-        (0, Op::Delete { mount: MountId::SharedRead, path: "seed_0.txt".to_string() }),
-        (0, Op::Rename { mount: MountId::SharedRead, from: "seed_0.txt".to_string(), to: "seed_0_new.txt".to_string() }),
-
-        (0, Op::Write { mount: MountId::SharedWrite, path: "sw.txt".to_string(), content: b"sw".to_vec() }),
-        (1, Op::Read { mount: MountId::SharedWrite, path: "sw.txt".to_string() }),
-        (1, Op::Append { mount: MountId::SharedWrite, path: "sw.txt".to_string(), content: b"+".to_vec() }),
-        (0, Op::Exists { mount: MountId::SharedWrite, path: "sw.txt".to_string() }),
-        (0, Op::Stat { mount: MountId::SharedWrite, path: "sw.txt".to_string() }),
-        (1, Op::List { mount: MountId::SharedWrite, path: "".to_string() }),
-        (0, Op::Rename { mount: MountId::SharedWrite, from: "sw.txt".to_string(), to: "sw2.txt".to_string() }),
-        (1, Op::Delete { mount: MountId::SharedWrite, path: "sw2.txt".to_string() }),
-
-        (0, Op::SearchChroma { query: "smoke_q".to_string() }),
-        (1, Op::SearchChroma { query: "smoke_q2".to_string() }),
+        (
+            1,
+            Op::Read {
+                mount: MountId::Indexed,
+                path: "i1.txt".to_string(),
+            },
+        ),
+        (
+            1,
+            Op::IndexFile {
+                path: "i1.txt".to_string(),
+            },
+        ),
+        (
+            1,
+            Op::Rename {
+                mount: MountId::Indexed,
+                from: "i1.txt".to_string(),
+                to: "i1_renamed.txt".to_string(),
+            },
+        ),
+        (
+            1,
+            Op::Delete {
+                mount: MountId::Indexed,
+                path: "i1_renamed.txt".to_string(),
+            },
+        ),
+        (
+            0,
+            Op::Read {
+                mount: MountId::SharedRead,
+                path: "seed_0.txt".to_string(),
+            },
+        ),
+        (
+            0,
+            Op::Exists {
+                mount: MountId::SharedRead,
+                path: "seed_0.txt".to_string(),
+            },
+        ),
+        (
+            0,
+            Op::Stat {
+                mount: MountId::SharedRead,
+                path: "seed_0.txt".to_string(),
+            },
+        ),
+        (
+            0,
+            Op::List {
+                mount: MountId::SharedRead,
+                path: "".to_string(),
+            },
+        ),
+        (
+            0,
+            Op::Write {
+                mount: MountId::SharedRead,
+                path: "ro.txt".to_string(),
+                content: b"no".to_vec(),
+            },
+        ),
+        (
+            0,
+            Op::Append {
+                mount: MountId::SharedRead,
+                path: "seed_0.txt".to_string(),
+                content: b"no".to_vec(),
+            },
+        ),
+        (
+            0,
+            Op::Delete {
+                mount: MountId::SharedRead,
+                path: "seed_0.txt".to_string(),
+            },
+        ),
+        (
+            0,
+            Op::Rename {
+                mount: MountId::SharedRead,
+                from: "seed_0.txt".to_string(),
+                to: "seed_0_new.txt".to_string(),
+            },
+        ),
+        (
+            0,
+            Op::Write {
+                mount: MountId::SharedWrite,
+                path: "sw.txt".to_string(),
+                content: b"sw".to_vec(),
+            },
+        ),
+        (
+            1,
+            Op::Read {
+                mount: MountId::SharedWrite,
+                path: "sw.txt".to_string(),
+            },
+        ),
+        (
+            1,
+            Op::Append {
+                mount: MountId::SharedWrite,
+                path: "sw.txt".to_string(),
+                content: b"+".to_vec(),
+            },
+        ),
+        (
+            0,
+            Op::Exists {
+                mount: MountId::SharedWrite,
+                path: "sw.txt".to_string(),
+            },
+        ),
+        (
+            0,
+            Op::Stat {
+                mount: MountId::SharedWrite,
+                path: "sw.txt".to_string(),
+            },
+        ),
+        (
+            1,
+            Op::List {
+                mount: MountId::SharedWrite,
+                path: "".to_string(),
+            },
+        ),
+        (
+            0,
+            Op::Rename {
+                mount: MountId::SharedWrite,
+                from: "sw.txt".to_string(),
+                to: "sw2.txt".to_string(),
+            },
+        ),
+        (
+            1,
+            Op::Delete {
+                mount: MountId::SharedWrite,
+                path: "sw2.txt".to_string(),
+            },
+        ),
+        (
+            0,
+            Op::SearchChroma {
+                query: "smoke_q".to_string(),
+            },
+        ),
+        (
+            1,
+            Op::SearchChroma {
+                query: "smoke_q2".to_string(),
+            },
+        ),
     ];
 
     for (agent_id, op) in ops {
@@ -346,6 +629,32 @@ proptest! {
             seed,
             steps,
             write_back,
+            concurrent_pct,
+            violations
+        );
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig {
+        cases: 24,
+        max_shrink_iters: 128,
+        .. ProptestConfig::default()
+    })]
+
+    #[test]
+    fn prop_sim_write_back_forced_flush(
+        seed in any::<u64>(),
+        steps in 20usize..180,
+        concurrent_pct in 0u8..=90u8,
+    ) {
+        let ratio = (concurrent_pct as f64) / 100.0;
+        let violations = run_forced_flush_case(seed, steps, ratio);
+        prop_assert!(
+            violations.is_empty(),
+            "seed {} steps {} forced-flush concurrent {}%: {:#?}",
+            seed,
+            steps,
             concurrent_pct,
             violations
         );
