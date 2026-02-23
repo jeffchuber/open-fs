@@ -1,4 +1,4 @@
-# AX Use Cases
+# OpenFS Use Cases
 
 ## 1. Agent Workspace Isolation
 
@@ -13,9 +13,9 @@ Agents work in one namespace while storage stays separated.
 Use indexing + search to retrieve relevant code/docs quickly:
 
 ```bash
-ax index /workspace --incremental
-ax search "token refresh behavior" --limit 8
-ax grep "TODO|FIXME" /workspace --recursive
+openfs index /workspace --incremental
+openfs search "token refresh behavior" --limit 8
+openfs grep "TODO|FIXME" /workspace --recursive
 ```
 
 ## 3. Tiered Storage
@@ -34,4 +34,4 @@ Use write-back modes with WAL for reliability during intermittent connectivity.
 
 ## 5. Tool-Driven Automation via MCP
 
-Run `ax mcp` and let tool-using agents perform file/search operations directly through MCP.
+Run `openfs mcp` and let tool-using agents perform file/search operations directly through MCP.

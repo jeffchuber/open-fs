@@ -26,7 +26,7 @@ backends:
   # Scratch space for temporary files
   scratch:
     type: fs
-    root: /tmp/ax-scratch
+    root: /tmp/openfs-scratch
 
 mounts:
   # Main workspace - agent can read/write

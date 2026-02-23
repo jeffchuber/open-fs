@@ -49,8 +49,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `config`, `status`, `watch`, `tools`
 
 #### Language Bindings
-- Python bindings via PyO3 (ax-ffi crate)
-- TypeScript/Node.js bindings via napi-rs (ax-js crate)
+- Python bindings via PyO3 (openfs-ffi crate)
+- TypeScript/Node.js bindings via napi-rs (openfs-js crate)
 
 #### Observability
 - Tracing instrumentation with `tracing` crate

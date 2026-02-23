@@ -1,0 +1,23 @@
+[package]
+name = "openfs-mcp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Model Context Protocol (MCP) server for OpenFS VFS"
+
+[dependencies]
+openfs-config = { path = "../openfs-config" }
+openfs-core = { path = "../openfs-core" }
+openfs-local = { path = "../openfs-local" }
+openfs-remote = { path = "../openfs-remote" }
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = "0.1"
+thiserror = "2"
+uuid = { version = "1", features = ["v4"] }
+regex = "1"
+
+[dev-dependencies]
+tempfile = "3"

@@ -2,7 +2,7 @@
 # Requires: cargo build --features postgres
 #
 # The Postgres backend stores files in a table:
-# CREATE TABLE ax_files (
+# CREATE TABLE openfs_files (
 #     path TEXT PRIMARY KEY,
 #     content BYTEA NOT NULL,
 #     size BIGINT NOT NULL,
@@ -17,8 +17,8 @@ backends:
     type: postgres
     connection_url: ${DATABASE_URL}
     # Or explicit connection string:
-    # connection_url: postgres://user:password@localhost:5432/ax_files
-    table_name: ax_files
+    # connection_url: postgres://user:password@localhost:5432/openfs_files
+    table_name: openfs_files
     max_connections: 5
 
   # Local filesystem for temp files

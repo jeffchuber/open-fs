@@ -1,19 +1,19 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/ax-config",
-    "crates/ax-core",
-    "crates/ax-local",
-    "crates/ax-remote",
-    "crates/ax-fuse",
-    "crates/ax-mcp",
-    "crates/ax-cli",
-    "crates/ax-sim",
+    "crates/openfs-config",
+    "crates/openfs-core",
+    "crates/openfs-local",
+    "crates/openfs-remote",
+    "crates/openfs-fuse",
+    "crates/openfs-mcp",
+    "crates/openfs-cli",
+    "crates/openfs-sim",
 ]
 
 [workspace.package]
 version = "0.3.0"
 edition = "2021"
 license = "MIT"
-repository = "https://github.com/ax-vfs/ax"
+repository = "https://github.com/open-fs/open-fs"
 keywords = ["vfs", "filesystem", "storage", "indexing"]

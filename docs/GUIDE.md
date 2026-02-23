@@ -1,8 +1,8 @@
-# AX Guide
+# OpenFS Guide
 
-AX is a virtual filesystem for agent workflows.
+OpenFS is a virtual filesystem for agent workflows.
 
-## What AX does
+## What OpenFS does
 
 - Maps multiple storage backends into one namespace.
 - Routes operations by longest mount-path prefix.
@@ -10,6 +10,12 @@ AX is a virtual filesystem for agent workflows.
 - Provides grep and semantic search.
 - Exposes an MCP tool server.
 - Mounts via FUSE on macOS/Linux.
+
+## CLI DX Quickstarts
+
+- `docs/openfs-local.md` - local indexing + semantic search dev loop
+- `docs/openfs-remote.md` - VFS operations and remote-interface workflow
+- `docs/openfs-local-remote.md` - local-first write-back with explicit flush control
 
 ## Minimal config
 
@@ -29,25 +35,25 @@ mounts:
 ## Core operations
 
 ```bash
-ax write /workspace/a.txt "hello"
-ax cat /workspace/a.txt
-ax ls /workspace
-ax cp /workspace/a.txt /workspace/b.txt
-ax mv /workspace/b.txt /workspace/c.txt
-ax rm /workspace/c.txt
+openfs write /workspace/a.txt "hello"
+openfs cat /workspace/a.txt
+openfs ls /workspace
+openfs cp /workspace/a.txt /workspace/b.txt
+openfs mv /workspace/b.txt /workspace/c.txt
+openfs rm /workspace/c.txt
 ```
 
 ## Search
 
 ```bash
-ax grep "hello" /workspace --recursive
-ax index /workspace
-ax search "where is greeting logic" --limit 10
+openfs grep "hello" /workspace --recursive
+openfs index /workspace
+openfs search "where is greeting logic" --limit 10
 ```
 
 ## Watch config
 
-`ax watch` supports defaults from config (`defaults.watch` or `mounts[].watch`):
+`openfs watch` supports defaults from config (`defaults.watch` or `mounts[].watch`):
 
 ```yaml
 defaults:
@@ -69,8 +75,8 @@ CLI flags still override config values.
 Supported backend types:
 - `fs`
 - `memory`
-- `s3` (build `ax-cli` with `--features ax-remote/s3`)
-- `postgres` (build `ax-cli` with `--features ax-remote/postgres`)
+- `s3` (build `openfs-cli` with `--features openfs-remote/s3`)
+- `postgres` (build `openfs-cli` with `--features openfs-remote/postgres`)
 - `chroma`
 
 Example mixed configuration:
@@ -107,7 +113,7 @@ mounts:
 Run the MCP server over stdio:
 
 ```bash
-ax mcp
+openfs mcp
 ```
 
 ## Sync Control
@@ -115,18 +121,18 @@ ax mcp
 For write-back mounts:
 
 ```bash
-ax sync status
-ax sync flush
+openfs sync status
+openfs sync flush
 ```
 
 ## FUSE
 
 ```bash
-ax --config ax.yaml mount ~/ax-mount
-ax unmount ~/ax-mount
+openfs --config openfs.yaml mount ~/openfs-mount
+openfs unmount ~/openfs-mount
 ```
 
 ## Notes
 
-- Semantic indexing and search are implemented in `ax-local`.
-- There is no standalone `ax-indexing` crate in the active workspace surface.
+- Semantic indexing and search are implemented in `openfs-local`.
+- There is no standalone `openfs-indexing` crate in the active workspace surface.

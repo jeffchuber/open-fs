@@ -1,6 +1,6 @@
-# AX - Agentic Files
+# OpenFS
 
-AX is a virtual filesystem for AI agents and automation.
+OpenFS is a virtual filesystem for AI agents and automation.
 
 It provides a unified namespace across mounted storage backends, with:
 - routing by mount path
@@ -11,50 +11,45 @@ It provides a unified namespace across mounted storage backends, with:
 
 ## Current Scope
 
-AX currently ships as a Rust workspace with these production crates:
-- `ax-config` config parsing/validation
-- `ax-core` shared types/errors/cache/tool schema
-- `ax-local` indexing + search pipeline (this is the indexing implementation)
-- `ax-remote` VFS routing/backends/sync/WAL/grep
-- `ax-fuse` Unix FUSE integration
-- `ax-mcp` MCP server
-- `ax-cli` CLI
-- `ax-sim` simulation harness
+OpenFS currently ships as a Rust workspace with these production crates:
+- `openfs-config` config parsing/validation
+- `openfs-core` shared types/errors/cache/tool schema
+- `openfs-local` indexing + search pipeline (this is the indexing implementation)
+- `openfs-remote` VFS routing/backends/sync/WAL/grep
+- `openfs-fuse` Unix FUSE integration
+- `openfs-mcp` MCP server
+- `openfs-cli` CLI
+- `openfs-sim` simulation harness
 
-Removed from this repo surface:
-- REST API server (`ax-server`)
-- Python bindings (`ax-ffi`)
-- TypeScript bindings (`ax-js`)
-- standalone `ax-indexing` crate
+Also in this repo:
+- `ts/` — TypeScript package (`@open-fs/core`): thin typed Vfs wrapper over the Rust binary via MCP
 
 ## Install
 
 ```bash
-git clone https://github.com/ax-vfs/ax.git
-cd ax
 cargo build --release
-cargo install --path crates/ax-cli
+cargo install --path crates/openfs-cli
 ```
 
 ### Optional backend features
 
 ```bash
-# S3 backend support in ax-cli
-cargo install --path crates/ax-cli --features ax-remote/s3
+# S3 backend support
+cargo install --path crates/openfs-cli --features openfs-remote/s3
 
-# PostgreSQL backend support in ax-cli
-cargo install --path crates/ax-cli --features ax-remote/postgres
+# PostgreSQL backend support
+cargo install --path crates/openfs-cli --features openfs-remote/postgres
 
-# all optional remote backends in ax-cli
-cargo install --path crates/ax-cli --features ax-remote/all-backends
+# all optional remote backends
+cargo install --path crates/openfs-cli --features openfs-remote/all-backends
 
 # FUSE mount command support
-cargo install --path crates/ax-cli --features fuse
+cargo install --path crates/openfs-cli --features fuse
 ```
 
 ## Quick Start
 
-Create `ax.yaml`:
+Create `openfs.yaml`:
 
 ```yaml
 name: my-workspace
@@ -72,10 +67,10 @@ mounts:
 Use the CLI:
 
 ```bash
-ax write /workspace/hello.txt "Hello, world!"
-ax cat /workspace/hello.txt
-ax ls /workspace
-ax grep "Hello" /workspace --recursive
+openfs write /workspace/hello.txt "Hello, world!"
+openfs cat /workspace/hello.txt
+openfs ls /workspace
+openfs grep "Hello" /workspace --recursive
 ```
 
 ## CLI Commands
@@ -114,8 +109,8 @@ ax grep "Hello" /workspace --recursive
 Supported backend types:
 - `fs`
 - `memory`
-- `s3` (build `ax-cli` with feature `ax-remote/s3`)
-- `postgres` (build `ax-cli` with feature `ax-remote/postgres`)
+- `s3` (build `openfs-cli` with feature `openfs-remote/s3`)
+- `postgres` (build `openfs-cli` with feature `openfs-remote/postgres`)
 - `chroma`
 
 Example S3 backend:
@@ -139,11 +134,11 @@ backends:
 
 ## Semantic Search
 
-Indexing/search is implemented in `ax-local`.
+Indexing/search is implemented in `openfs-local`.
 
 ```bash
-ax index /workspace
-ax search "authentication flow" --limit 5
+openfs index /workspace
+openfs search "authentication flow" --limit 5
 ```
 
 ## MCP
@@ -151,14 +146,14 @@ ax search "authentication flow" --limit 5
 Run MCP server over stdio:
 
 ```bash
-ax mcp
+openfs mcp
 ```
 
 ## FUSE (macOS/Linux)
 
 ```bash
-ax --config ax.yaml mount ~/ax-mount
-ax unmount ~/ax-mount
+openfs --config openfs.yaml mount ~/openfs-mount
+openfs unmount ~/openfs-mount
 ```
 
 ## Write-Back Sync
@@ -166,9 +161,27 @@ ax unmount ~/ax-mount
 For write-back mounts, inspect sync state and force a flush:
 
 ```bash
-ax sync status
-ax sync flush
+openfs sync status
+openfs sync flush
 ```
+
+## Simulation Debug UI
+
+Generate an interactive debug dashboard from `openfs-sim` output:
+
+```bash
+cargo run -p openfs-sim --example debug_ui -- --steps 200 --seed 42 --mode mixed --write-back --out /tmp/openfs-sim-debug
+```
+
+This writes:
+- `/tmp/openfs-sim-debug/sim-debug-ui.html`
+- `/tmp/openfs-sim-debug/sim-debug-data.json`
+
+Open the HTML and use the replay controls to scrub and play simulation state forward/backward by step.
+The replay panel includes a file state map (local vs remote vs pending/WAL) so you can see where each file currently lives.
+The debug example runs with three clients:
+- `agent 1` and `agent 2` share one indexed backing store shown as `Remote 0`.
+- `agent 0` keeps a separate indexed backing store.
 
 ## License
 

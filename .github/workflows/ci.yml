@@ -66,19 +66,19 @@ jobs:
           key: ${{ runner.os }}-cargo-features-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Build with S3
-        run: cargo build -p ax-remote --features s3
+        run: cargo build -p openfs-remote --features s3
 
       - name: Build with Postgres
-        run: cargo build -p ax-remote --features postgres
+        run: cargo build -p openfs-remote --features postgres
 
       - name: Build with all backends
-        run: cargo build -p ax-remote --features all-backends
+        run: cargo build -p openfs-remote --features all-backends
 
       - name: Build with PDF extractor
-        run: cargo build -p ax-local --features extractor-pdf
+        run: cargo build -p openfs-local --features extractor-pdf
 
       - name: Test with all features
-        run: cargo test -p ax-remote --features all-backends
+        run: cargo test -p openfs-remote --features all-backends
 
   lint:
     name: Lint
@@ -121,7 +121,7 @@ jobs:
         uses: dtolnay/rust-action@stable
 
       - name: Build CLI
-        run: cargo build -p ax-cli
+        run: cargo build -p openfs-cli
 
       - name: Run integration tests
-        run: cargo test -p ax-cli --test cli_integration
+        run: cargo test -p openfs-cli --test cli_integration

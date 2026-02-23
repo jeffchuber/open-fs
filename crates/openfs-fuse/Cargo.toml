@@ -1,0 +1,31 @@
+[package]
+name = "openfs-fuse"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "FUSE filesystem implementation for OpenFS VFS"
+
+[lib]
+test = false
+doctest = false
+bench = false
+
+[dependencies]
+openfs-config = { path = "../openfs-config" }
+openfs-core = { path = "../openfs-core" }
+openfs-remote = { path = "../openfs-remote" }
+tokio = { version = "1", features = ["full"] }
+thiserror = "2"
+tracing = "0.1"
+urlencoding = "2"
+chrono = { version = "0.4", features = ["serde"] }
+parking_lot = "0.12"
+
+# Unix-only dependencies (macOS, Linux)
+[target.'cfg(unix)'.dependencies]
+fuser = "0.14"
+libc = "0.2"
+
+[dev-dependencies]
+tempfile = "3"

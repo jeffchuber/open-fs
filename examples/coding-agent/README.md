@@ -134,10 +134,10 @@ export AWS_SECRET_ACCESS_KEY=...
 
 ```bash
 # Initialize context for a new task
-ax write /context/current_task.md "Implement user authentication"
+openfs write /context/current_task.md "Implement user authentication"
 
 # Save a skill
-ax write /skills/auth_patterns.md "$(cat << 'EOF'
+openfs write /skills/auth_patterns.md "$(cat << 'EOF'
 # Authentication Patterns
 
 ## JWT Authentication
@@ -149,29 +149,29 @@ EOF
 )"
 
 # Record a memory
-ax append /memories/conversations/$(date +%Y-%m-%d).jsonl \
+openfs append /memories/conversations/$(date +%Y-%m-%d).jsonl \
   '{"role": "user", "content": "Use bcrypt for passwords"}'
 
 # Store a code snippet
-ax write /code/snippets/python/jwt_auth.py "$(cat my_auth.py)"
+openfs write /code/snippets/python/jwt_auth.py "$(cat my_auth.py)"
 
 # Search for relevant code
-ax search "JWT token validation" --path /code --limit 5
+openfs search "JWT token validation" --path /code --limit 5
 
 # Use scratch for experiments
-ax write /scratch/experiment.py "# Quick test..."
-ax rm /scratch/experiment.py  # Clean up
+openfs write /scratch/experiment.py "# Quick test..."
+openfs rm /scratch/experiment.py  # Clean up
 ```
 
 ### Python Usage
 
 ```python
-import ax
+import openfs
 import json
 from datetime import datetime
 
 # Load the coding agent VFS
-vfs = ax.load_config_file("ax.yaml")
+vfs = openfs.load_config_file("openfs.yaml")
 
 # =============================================================================
 # CONTEXT MANAGEMENT
@@ -325,9 +325,9 @@ def decode_token(token: str, secret: str) -> dict:
 ### TypeScript Usage
 
 ```typescript
-import { loadConfigFile } from 'ax-vfs';
+import { loadConfigFile } from 'openfs';
 
-const vfs = loadConfigFile('ax.yaml');
+const vfs = loadConfigFile('openfs.yaml');
 
 // Context management
 interface TaskContext {
@@ -408,16 +408,16 @@ console.log('Tools:', tools);
 
 ```bash
 # Find authentication-related skills
-ax search "JWT authentication" --path /skills
+openfs search "JWT authentication" --path /skills
 
 # Search code patterns
-ax search "async database connection" --path /code
+openfs search "async database connection" --path /code
 
 # Find relevant memories
-ax search "user prefers functional style" --path /memories
+openfs search "user prefers functional style" --path /memories
 
 # Search documentation
-ax search "FastAPI dependency injection" --path /docs
+openfs search "FastAPI dependency injection" --path /docs
 ```
 
 ## Integration with AI Assistants
@@ -426,10 +426,10 @@ The VFS can generate tool definitions for AI assistants:
 
 ```bash
 # For Claude (MCP format)
-ax tools --format mcp > tools.json
+openfs tools --format mcp > tools.json
 
 # For OpenAI/GPT
-ax tools --format openai > functions.json
+openfs tools --format openai > functions.json
 ```
 
 This enables AI assistants to:

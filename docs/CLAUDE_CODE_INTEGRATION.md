@@ -1,28 +1,28 @@
-# AX + Claude Code
+# OpenFS + Claude Code
 
 Use AX through either:
 - FUSE mount (filesystem workflow)
-- MCP server (`ax mcp`) for tool-based workflows
+- MCP server (`openfs mcp`) for tool-based workflows
 
 ## FUSE path
 
-1. Create `ax.yaml`.
+1. Create `openfs.yaml`.
 2. Mount AX:
 
 ```bash
-ax --config ax.yaml mount ~/ax-mount
+openfs --config openfs.yaml mount ~/openfs-mount
 ```
 
 3. Run Claude Code against the mount:
 
 ```bash
-claude --working-dir ~/ax-mount
+claude --working-dir ~/openfs-mount
 ```
 
 4. Unmount when done:
 
 ```bash
-ax unmount ~/ax-mount
+openfs unmount ~/openfs-mount
 ```
 
 ## MCP path
@@ -30,7 +30,7 @@ ax unmount ~/ax-mount
 Run MCP server:
 
 ```bash
-ax mcp
+openfs mcp
 ```
 
 This exposes AX operations as MCP tools (`read`, `write`, `ls`, `stat`, `delete`, `grep`, `search`).
@@ -38,4 +38,4 @@ This exposes AX operations as MCP tools (`read`, `write`, `ls`, `stat`, `delete`
 ## Notes
 
 - FUSE support targets macOS/Linux.
-- Indexing + semantic search are provided by `ax-local`.
+- Indexing + semantic search are provided by `openfs-local`.

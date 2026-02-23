@@ -1,4 +1,4 @@
-# Multi-backend AX configuration
+# Multi-backend OpenFS configuration
 # Demonstrates multiple backends with different mount points
 
 name: multi-backend-workspace
@@ -19,7 +19,7 @@ backends:
   #   type: s3
   #   bucket: my-bucket
   #   region: us-west-2
-  #   prefix: ax-data
+  #   prefix: openfs-data
 
 mounts:
   # Main workspace - read/write

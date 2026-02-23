@@ -5,29 +5,29 @@ This guide covers a minimal AX setup with CLI, semantic indexing/search, MCP, an
 ## Install
 
 ```bash
-git clone https://github.com/ax-vfs/ax.git
-cd ax
+git clone https://github.com/open-fs/openfs.git
+cd openfs
 cargo build --release
-cargo install --path crates/ax-cli
+cargo install --path crates/openfs-cli
 ```
 
 Optional backend features:
 
 ```bash
-cargo install --path crates/ax-cli --features ax-remote/s3
-cargo install --path crates/ax-cli --features ax-remote/postgres
-cargo install --path crates/ax-cli --features ax-remote/all-backends
+cargo install --path crates/openfs-cli --features openfs-remote/s3
+cargo install --path crates/openfs-cli --features openfs-remote/postgres
+cargo install --path crates/openfs-cli --features openfs-remote/all-backends
 ```
 
 FUSE command support:
 
 ```bash
-cargo install --path crates/ax-cli --features fuse
+cargo install --path crates/openfs-cli --features fuse
 ```
 
 ## Create a config
 
-Save as `ax.yaml`:
+Save as `openfs.yaml`:
 
 ```yaml
 name: hello
@@ -49,12 +49,12 @@ mkdir -p data
 ## Basic CLI flow
 
 ```bash
-ax write /files/hello.txt "Hello, world!"
-ax cat /files/hello.txt
-ax ls /files
-ax append /files/hello.txt " More text."
-ax stat /files/hello.txt
-ax grep "Hello" /files --recursive
+openfs write /files/hello.txt "Hello, world!"
+openfs cat /files/hello.txt
+openfs ls /files
+openfs append /files/hello.txt " More text."
+openfs stat /files/hello.txt
+openfs grep "Hello" /files --recursive
 ```
 
 ## Multiple mounts
@@ -80,32 +80,32 @@ mounts:
 
 ## Semantic indexing/search
 
-Indexing is implemented in `ax-local`.
+Indexing is implemented in `openfs-local`.
 
 ```bash
-ax index /files
-ax index /files --incremental
-ax index-status
-ax search "how authentication works" --limit 5
+openfs index /files
+openfs index /files --incremental
+openfs index-status
+openfs search "how authentication works" --limit 5
 ```
 
 ## MCP
 
 ```bash
-ax mcp
+openfs mcp
 ```
 
 ## Sync
 
 ```bash
-ax sync status
-ax sync flush
+openfs sync status
+openfs sync flush
 ```
 
 ## FUSE mount (macOS/Linux)
 
 ```bash
-ax --config ax.yaml mount ~/ax-mount
-ls ~/ax-mount/files
-ax unmount ~/ax-mount
+openfs --config openfs.yaml mount ~/openfs-mount
+ls ~/openfs-mount/files
+openfs unmount ~/openfs-mount
 ```

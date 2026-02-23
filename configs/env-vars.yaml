@@ -1,12 +1,12 @@
 # Configuration using environment variables
-# Set AX_DATA_ROOT before using this config
+# Set OPENFS_DATA_ROOT before using this config
 
 name: env-config
 
 backends:
   local:
     type: fs
-    root: ${AX_DATA_ROOT}
+    root: ${OPENFS_DATA_ROOT}
 
 mounts:
   - path: /data

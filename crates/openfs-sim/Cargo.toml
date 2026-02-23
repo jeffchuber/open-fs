@@ -1,0 +1,27 @@
+[package]
+name = "openfs-sim"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Deterministic simulation harness for OpenFS multi-agent storage testing"
+
+[lib]
+test = true
+doctest = false
+
+[dependencies]
+openfs-core = { path = "../openfs-core" }
+openfs-remote = { path = "../openfs-remote" }
+openfs-local = { path = "../openfs-local" }
+openfs-config = { path = "../openfs-config" }
+tokio = { version = "1", features = ["full", "test-util"] }
+async-trait = "0.1"
+chrono = "0.4"
+rand = "0.8"
+rand_chacha = "0.3"
+serde_json = "1"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full", "test-util"] }
+proptest = "1"
